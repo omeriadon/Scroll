@@ -2,150 +2,108 @@ import Foundation
 import CoreGraphics
 import AppKit
 
-@MainActor
+// Runs entirely on its own high-priority queue — zero MainActor involvement on the scroll path.
 public final class MacScrollExecutor {
-    private static let scrollPixelScaleFactor: Double = 85.0
-    private static let animationRateHz: Double = 120.0
-    private static let maxPixelsPerTick: Double = 10.0
-    private static let idleStopSeconds: TimeInterval = 0.8
-    private static let resetSequenceThreshold: Int64 = 1_000
-    private static let resetLowSequenceCutoff: Int64 = 12
+    private static let pixelScale:        Double      = 85.0
+    private static let maxPixelsPerTick:  Double      = 10.0
+    private static let idleSeconds:       TimeInterval = 0.8
+    private static let resetLowCutoff:    Int64        = 12
+    private static let resetThreshold:    Int64        = 1_000
+    // 8 ms ≈ 120 Hz; DispatchSourceTimer is far more precise than Task.sleep
+    private static let timerIntervalNs:   UInt64       = 8_333_333
 
-    private var lastSequence: Int64 = 0
-    private var lastTimestamp: TimeInterval = 0
-    private var lastIntentTimestamp: TimeInterval = 0
+    private let queue = DispatchQueue(label: "com.scroll.mac.executor", qos: .userInteractive)
+    private var timer: DispatchSourceTimer?
 
-    // Incoming command budget in pixel-space, consumed by local animator.
-    private var accumulatedPixelBudget: Double = 0
-    private var pendingPixelRemainder: Double = 0
-
-    private var animatorTask: Task<Void, Never>?
+    // All state below must only be accessed on `queue`
+    private var lastSequence:          Int64        = 0
+    private var lastIntentTime:        TimeInterval = 0
+    private var pixelBudget:           Double       = 0
+    private var pixelRemainder:        Double       = 0
     private let eventSource = CGEventSource(stateID: .hidSystemState)
 
-    public init() {
-    }
+    public init() {}
 
-    public func refreshSettings() {
-        // Kept for API compatibility with existing callers.
-        // Settings are now streamed from iPhone inside each command packet.
-    }
-
+    // Can be called from any queue
     public func executeScrollCommand(_ command: ScrollCommand) {
-        // Skip out-of-order commands, but allow a fresh iPhone session reset.
+        queue.async { [self] in _execute(command) }
+    }
+
+    // MARK: - Queue-confined implementation
+
+    private func _execute(_ command: ScrollCommand) {
+        // Out-of-order rejection with new-session exemption
         if command.sequence <= lastSequence {
-            let sequenceDelta = lastSequence - command.sequence
-            let isLikelyNewSession =
-                command.sequence <= Self.resetLowSequenceCutoff &&
-                sequenceDelta >= Self.resetSequenceThreshold &&
-                command.timestamp > lastTimestamp
-
-            guard isLikelyNewSession else { return }
-
-            // Reset local execution state for clean continuation.
-            accumulatedPixelBudget = 0
-            pendingPixelRemainder = 0
+            let delta      = lastSequence - command.sequence
+            let isNewSession = command.sequence <= Self.resetLowCutoff && delta >= Self.resetThreshold
+            guard isNewSession else { return }
+            pixelBudget    = 0
+            pixelRemainder = 0
         }
 
-        lastSequence = command.sequence
-        lastTimestamp = command.timestamp
-        lastIntentTimestamp = Date().timeIntervalSinceReferenceDate
+        lastSequence    = command.sequence
+        lastIntentTime  = CACurrentMediaTime()
 
-        // Apply settings bundled with this command (iPhone is source of truth)
         var finalDelta = command.delta * command.settings.scrollSensitivity
-        if command.settings.invertScrollDirection {
-            finalDelta = -finalDelta
-        }
+        if command.settings.invertScrollDirection { finalDelta = -finalDelta }
 
-        // Convert to pixel budget and let local animator smooth/schedule events.
-        accumulatedPixelBudget += finalDelta * Self.scrollPixelScaleFactor
-        startAnimatorIfNeeded()
+        pixelBudget += finalDelta * Self.pixelScale
+        startTimerIfNeeded()
     }
 
-    private func startAnimatorIfNeeded() {
-        guard animatorTask == nil else { return }
-
-        animatorTask = Task { [weak self] in
-            guard let self else { return }
-
-            let frameDurationNs = UInt64(1_000_000_000.0 / Self.animationRateHz)
-
-            while !Task.isCancelled {
-                await self.tickAnimator()
-                try? await Task.sleep(nanoseconds: frameDurationNs)
-            }
-        }
+    private func startTimerIfNeeded() {
+        guard timer == nil else { return }
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now(), repeating: .nanoseconds(Int(Self.timerIntervalNs)), leeway: .microseconds(200))
+        t.setEventHandler { [weak self] in self?.tick() }
+        t.resume()
+        timer = t
     }
 
-    private func stopAnimatorIfIdle() {
-        let now = Date().timeIntervalSinceReferenceDate
-        let isIdleByTime = now - lastIntentTimestamp > Self.idleStopSeconds
-        let isIdleByBudget = abs(accumulatedPixelBudget) < 0.001 && abs(pendingPixelRemainder) < 0.001
-
-        guard isIdleByTime && isIdleByBudget else { return }
-
-        animatorTask?.cancel()
-        animatorTask = nil
-    }
-
-    private func tickAnimator() {
-        guard accumulatedPixelBudget != 0 || pendingPixelRemainder != 0 else {
-            stopAnimatorIfIdle()
+    private func tick() {
+        guard pixelBudget != 0 || pixelRemainder != 0 else {
+            stopIfIdle()
             return
         }
 
-        let clampedStep = accumulatedPixelBudget.clamped(
-            min: -Self.maxPixelsPerTick,
-            max: Self.maxPixelsPerTick
-        )
-        accumulatedPixelBudget -= clampedStep
+        let step     = pixelBudget.clamped(to: -Self.maxPixelsPerTick ... Self.maxPixelsPerTick)
+        pixelBudget -= step
 
-        let totalPixelsThisTick = clampedStep + pendingPixelRemainder
-        let quantizedPixels = Int(totalPixelsThisTick.rounded(.towardZero))
-        pendingPixelRemainder = totalPixelsThisTick - Double(quantizedPixels)
+        let total     = step + pixelRemainder
+        let quantized = Int(total.rounded(.towardZero))
+        pixelRemainder = total - Double(quantized)
 
-        guard quantizedPixels != 0 else {
-            stopAnimatorIfIdle()
-            return
-        }
-
-        postScrollPixels(quantizedPixels)
-        stopAnimatorIfIdle()
+        if quantized != 0 { postScroll(quantized) }
+        stopIfIdle()
     }
 
-    private func postScrollPixels(_ quantizedPixels: Int) {
-        let wheelDelta = Int32(-quantizedPixels) // Negative for natural scrolling
+    private func stopIfIdle() {
+        let now      = CACurrentMediaTime()
+        let timeIdle = now - lastIntentTime > Self.idleSeconds
+        let dataIdle = abs(pixelBudget) < 0.001 && abs(pixelRemainder) < 0.001
+        guard timeIdle && dataIdle else { return }
+        timer?.cancel()
+        timer = nil
+    }
 
-        let pixelEvent = CGEvent(
-            scrollWheelEvent2Source: eventSource,
-            units: .pixel,
-            wheelCount: 1,
-            wheel1: wheelDelta,
-            wheel2: 0,
-            wheel3: 0
-        )
-
-        if let pixelEvent {
-            pixelEvent.post(tap: .cghidEventTap)
-        } else {
-            let lineEvent = CGEvent(
-                scrollWheelEvent2Source: eventSource,
-                units: .line,
-                wheelCount: 1,
-                wheel1: wheelDelta,
-                wheel2: 0,
-                wheel3: 0
-            )
-            lineEvent?.post(tap: .cghidEventTap)
+    private func postScroll(_ pixels: Int) {
+        let wheel = Int32(-pixels)
+        if let ev = CGEvent(scrollWheelEvent2Source: eventSource, units: .pixel,
+                            wheelCount: 1, wheel1: wheel, wheel2: 0, wheel3: 0) {
+            ev.post(tap: .cghidEventTap)
+        } else if let ev = CGEvent(scrollWheelEvent2Source: eventSource, units: .line,
+                                   wheelCount: 1, wheel1: wheel, wheel2: 0, wheel3: 0) {
+            ev.post(tap: .cghidEventTap)
         }
     }
 
     deinit {
-        animatorTask?.cancel()
+        timer?.cancel()
     }
 }
 
 private extension Double {
-    func clamped(min minValue: Double, max maxValue: Double) -> Double {
-        Swift.max(minValue, Swift.min(maxValue, self))
+    func clamped(to range: ClosedRange<Double>) -> Double {
+        Swift.max(range.lowerBound, Swift.min(range.upperBound, self))
     }
 }

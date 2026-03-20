@@ -7,6 +7,7 @@ struct ScrollApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+				.fontDesign(.monospaced)
                 .environment(connectivityManager)
         }
     }

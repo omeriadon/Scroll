@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2A365BA12F6A9100008B6B2C /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = 2A365BA22F6A9100008B6B2C /* Defaults */; };
+		2ACF50312F6D87DA00C3F9D4 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 2ACF50302F6D87DA00C3F9D4 /* ColorfulX */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -52,6 +52,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2ACF50312F6D87DA00C3F9D4 /* ColorfulX in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,7 +60,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2A365BA12F6A9100008B6B2C /* Defaults in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -116,6 +116,7 @@
 			);
 			name = Scroll_iPhone;
 			packageProductDependencies = (
+				2ACF50302F6D87DA00C3F9D4 /* ColorfulX */,
 			);
 			productName = Scroll;
 			productReference = 2A365B572F6A77BF008B6B2C /* Scroll_iPhone.app */;
@@ -139,7 +140,6 @@
 			);
 			name = Scroll_Mac;
 			packageProductDependencies = (
-				2A365BA22F6A9100008B6B2C /* Defaults */,
 			);
 			productName = ScrollMac;
 			productReference = 2A365B912F6A9000008B6B2C /* Scroll_Mac.app */;
@@ -173,7 +173,7 @@
 			mainGroup = 2A365B4E2F6A77BF008B6B2C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				2A365B7E2F6A7BF9008B6B2C /* XCRemoteSwiftPackageReference "Defaults" */,
+				2ACF502F2F6D87DA00C3F9D4 /* XCRemoteSwiftPackageReference "ColorfulX" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2A365B582F6A77BF008B6B2C /* Products */;
@@ -544,21 +544,21 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		2A365B7E2F6A7BF9008B6B2C /* XCRemoteSwiftPackageReference "Defaults" */ = {
+		2ACF502F2F6D87DA00C3F9D4 /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sindresorhus/Defaults";
+			repositoryURL = "https://github.com/Lakr233/ColorfulX";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 9.0.6;
+				minimumVersion = 6.1.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		2A365BA22F6A9100008B6B2C /* Defaults */ = {
+		2ACF50302F6D87DA00C3F9D4 /* ColorfulX */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 2A365B7E2F6A7BF9008B6B2C /* XCRemoteSwiftPackageReference "Defaults" */;
-			productName = Defaults;
+			package = 2ACF502F2F6D87DA00C3F9D4 /* XCRemoteSwiftPackageReference "ColorfulX" */;
+			productName = ColorfulX;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

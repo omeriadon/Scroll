@@ -1,193 +1,54 @@
 import Foundation
 
-public struct ScrollCommand: Codable, Sendable {
-    public static let currentProtocolVersion: UInt8 = 2
+// Wire format: 21 bytes (flat, no framing — UDP is message-framed)
+// offset  0 │ sequence     Int64 big-endian  (8 bytes)
+// offset  8 │ delta        Float32 LE        (4 bytes)
+// offset 12 │ velocity     Float32 LE        (4 bytes)
+// offset 16 │ sensitivity  Float32 LE        (4 bytes)
+// offset 20 │ flags        UInt8             (1 byte)  bit0=invertDirection
 
-    public let protocolVersion: UInt8
+public struct ScrollCommand: Sendable {
+    public static let wireSize = 21
+
     public let sequence: Int64
     public let delta: Double
     public let velocity: Double
-    public let timestamp: TimeInterval
     public let settings: SettingsSnapshot
 
-    public init(
-        protocolVersion: UInt8 = ScrollCommand.currentProtocolVersion,
-        sequence: Int64,
-        delta: Double,
-        velocity: Double,
-        timestamp: TimeInterval = Date().timeIntervalSince1970,
-        settings: SettingsSnapshot
-    ) {
-        self.protocolVersion = protocolVersion
+    public init(sequence: Int64, delta: Double, velocity: Double, settings: SettingsSnapshot) {
         self.sequence = sequence
-        self.delta = delta
+        self.delta    = delta
         self.velocity = velocity
-        self.timestamp = timestamp
         self.settings = settings
     }
-}
 
-public extension ScrollCommand {
-    // Compact binary encoding for minimal latency over network
-    // Format:
-    // [version:1][sequence:8][delta:8][velocity:8][timestamp:8]
-    // [settingsRevision:8][settingsUpdatedAt:8][scrollSensitivity:8]
-    // [invertScrollDirection:1][smoothingMode:1]
-    // Total = 59 bytes
-    func toBinaryData() -> Data {
-        var data = Data(capacity: 59)
-
-        // Version (1 byte)
-        data.append(protocolVersion)
-
-        // Sequence (8 bytes, big endian)
-        withUnsafeBytes(of: sequence.bigEndian) { data.append(contentsOf: $0) }
-
-        // Delta (8 bytes, IEEE 754 double)
-        withUnsafeBytes(of: delta) { data.append(contentsOf: $0) }
-
-        // Velocity (8 bytes, IEEE 754 double)
-        withUnsafeBytes(of: velocity) { data.append(contentsOf: $0) }
-
-        // Timestamp (8 bytes, IEEE 754 double)
-        withUnsafeBytes(of: timestamp) { data.append(contentsOf: $0) }
-
-        // Settings revision (8 bytes, big endian)
-        let revision = Int64(settings.revision)
-        withUnsafeBytes(of: revision.bigEndian) { data.append(contentsOf: $0) }
-
-        // Settings updatedAt (8 bytes, IEEE 754 double)
-        withUnsafeBytes(of: settings.updatedAt) { data.append(contentsOf: $0) }
-
-        // Scroll sensitivity (8 bytes, IEEE 754 double)
-        withUnsafeBytes(of: settings.scrollSensitivity) { data.append(contentsOf: $0) }
-
-        // Invert direction (1 byte)
-        data.append(settings.invertScrollDirection ? 1 : 0)
-
-        // Smoothing mode (1 byte)
-        switch settings.smoothingMode {
-        case .adaptive:
-            data.append(0)
-        case .linear:
-            data.append(1)
+    public func toWireData() -> Data {
+        var buf = Data(count: Self.wireSize)
+        buf.withUnsafeMutableBytes { p in
+            p.storeBytes(of: sequence.bigEndian,                              toByteOffset: 0,  as: Int64.self)
+            p.storeBytes(of: Float(delta).bitPattern,                         toByteOffset: 8,  as: UInt32.self)
+            p.storeBytes(of: Float(velocity).bitPattern,                      toByteOffset: 12, as: UInt32.self)
+            p.storeBytes(of: Float(settings.scrollSensitivity).bitPattern,    toByteOffset: 16, as: UInt32.self)
+            p.storeBytes(of: settings.invertScrollDirection ? UInt8(1) : 0,   toByteOffset: 20, as: UInt8.self)
         }
-
-        return data
+        return buf
     }
 
-    init(binaryData: Data) throws {
-        guard binaryData.count >= 33 else {
-            throw ScrollCommandError.invalidBinaryData
-        }
-
-        func readInt64BigEndian(at offset: Int) -> Int64 {
-            var value: Int64 = 0
-            _ = withUnsafeMutableBytes(of: &value) { rawBuffer in
-                binaryData.copyBytes(to: rawBuffer, from: offset..<(offset + 8))
-            }
-            return Int64(bigEndian: value)
-        }
-
-        func readDouble(at offset: Int) -> Double {
-            var value: Double = 0
-            _ = withUnsafeMutableBytes(of: &value) { rawBuffer in
-                binaryData.copyBytes(to: rawBuffer, from: offset..<(offset + 8))
-            }
-            return value
-        }
-
-        func readUInt8(at offset: Int) -> UInt8 {
-            binaryData[offset]
-        }
-
-        var offset = 0
-
-        // Version
-        let version = binaryData[offset]
-        offset += 1
-
-        // Sequence
-        let sequence = readInt64BigEndian(at: offset)
-        offset += 8
-
-        // Delta
-        let delta = readDouble(at: offset)
-        offset += 8
-
-        // Velocity
-        let velocity = readDouble(at: offset)
-        offset += 8
-
-        // Timestamp
-        let timestamp = readDouble(at: offset)
-        offset += 8
-
-        // Legacy payload (v1): [version][sequence][delta][velocity][timestamp] (33 bytes)
-        if version < 2 {
-            let settings = SettingsSnapshot(
-                revision: 0,
-                updatedAt: timestamp,
-                scrollSensitivity: 1.0,
-                invertScrollDirection: false,
-                smoothingMode: .adaptive
-            )
-
-            self.init(
-                protocolVersion: version,
-                sequence: sequence,
-                delta: delta,
-                velocity: velocity,
-                timestamp: timestamp,
-                settings: settings
-            )
-            return
-        }
-
-        guard binaryData.count >= 59 else {
-            throw ScrollCommandError.invalidBinaryData
-        }
-
-        // Settings revision
-        let revisionRaw = readInt64BigEndian(at: offset)
-        offset += 8
-
-        // Settings updated at
-        let settingsUpdatedAt = readDouble(at: offset)
-        offset += 8
-
-        // Settings sensitivity
-        let sensitivity = readDouble(at: offset)
-        offset += 8
-
-        // Invert direction
-        let invertDirection = readUInt8(at: offset) != 0
-        offset += 1
-
-        // Smoothing mode
-        let smoothingRaw = readUInt8(at: offset)
-        let smoothingMode: ScrollSmoothingMode = smoothingRaw == 1 ? .linear : .adaptive
-
-        let settings = SettingsSnapshot(
-            revision: max(Int(revisionRaw), 0),
-            updatedAt: settingsUpdatedAt,
-            scrollSensitivity: sensitivity,
-            invertScrollDirection: invertDirection,
-            smoothingMode: smoothingMode
-        )
-
-        self.init(
-            protocolVersion: version,
-            sequence: sequence,
-            delta: delta,
-            velocity: velocity,
-            timestamp: timestamp,
-            settings: settings
+    public init(wireData: Data) throws {
+        guard wireData.count >= Self.wireSize else { throw ScrollCommandError.invalidData }
+        let seq   = wireData.withUnsafeBytes { Int64(bigEndian: $0.loadUnaligned(fromByteOffset: 0,  as: Int64.self)) }
+        let d     = wireData.withUnsafeBytes { Float(bitPattern: $0.loadUnaligned(fromByteOffset: 8,  as: UInt32.self)) }
+        let v     = wireData.withUnsafeBytes { Float(bitPattern: $0.loadUnaligned(fromByteOffset: 12, as: UInt32.self)) }
+        let sens  = wireData.withUnsafeBytes { Float(bitPattern: $0.loadUnaligned(fromByteOffset: 16, as: UInt32.self)) }
+        let flags = wireData[20]
+        self.sequence = seq
+        self.delta    = Double(d)
+        self.velocity = Double(v)
+        self.settings = SettingsSnapshot(
+            scrollSensitivity:      Double(sens),
+            invertScrollDirection:  flags & 1 != 0
         )
     }
 }
 
-public enum ScrollCommandError: Error {
-    case encodingFailed
-    case invalidBinaryData
-}
+public enum ScrollCommandError: Error { case invalidData }

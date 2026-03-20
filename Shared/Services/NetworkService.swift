@@ -1,381 +1,236 @@
 import Foundation
 import Network
 
-// MARK: - Network Protocol Constants
+// MARK: - Protocol constants
+
 public enum ScrollNetworkProtocol {
-    public static let serviceType = "_scroll._tcp"
+    public static let serviceType = "_scroll._tcp"   // Bonjour label only; transport is UDP
     public static let serviceName = "Scroll"
     public static let defaultPort: UInt16 = 50505
 }
 
-// MARK: - TCP Configuration Extension
-extension NWParameters {
-    static func lowLatencyTCP() -> NWParameters {
-        let parameters = NWParameters.tcp
+// MARK: - Shared UDP parameters
 
-        // Optimize TCP for minimal latency
-        if let tcpOptions = parameters.defaultProtocolStack.transportProtocol as? NWProtocolTCP.Options {
-            tcpOptions.enableKeepalive = true
-            tcpOptions.keepaliveIdle = 2
-            tcpOptions.noDelay = true // TCP_NODELAY - disable Nagle's algorithm
-        }
-
-        return parameters
+private extension NWParameters {
+    static func scrollUDP() -> NWParameters {
+        let params = NWParameters.udp
+        params.allowLocalEndpointReuse = true
+        params.includePeerToPeer = true
+        return params
     }
 }
 
-// MARK: - Mac Network Listener
+// MARK: - Mac UDP Listener
+
 #if os(macOS)
-import AppKit
 import Observation
 
+@MainActor
 @Observable
 public final class MacScrollNetworkListener {
-    public private(set) var isListening = false
+    public private(set) var isListening   = false
     public private(set) var connectedClients: Set<String> = []
 
-    private var listener: NWListener?
-    private var connections: [NWConnection] = []
-    private let queue = DispatchQueue(label: "com.scroll.mac.network", qos: .userInteractive)
     public var onCommandReceived: ((ScrollCommand) -> Void)?
-    public var onStateChanged: (() -> Void)?
+    public var onStateChanged:    (() -> Void)?
+
+    private var listener:    NWListener?
+    private var connections: [String: NWConnection] = [:]
+    private let queue = DispatchQueue(label: "com.scroll.mac.network", qos: .userInteractive)
+    
+    // For cleanup in deinit
+    nonisolated(unsafe) private var _listenerForCleanup: NWListener?
+    nonisolated(unsafe) private var _connectionsForCleanup: [NWConnection] = []
 
     public init() {}
 
-    @MainActor
     public func startListening() {
         guard listener == nil else { return }
-
         do {
-            let parameters = NWParameters.lowLatencyTCP()
-            parameters.allowLocalEndpointReuse = true
-            parameters.acceptLocalOnly = true
+            let params = NWParameters.scrollUDP()
+            params.acceptLocalOnly = true
 
-            // Set up Bonjour service advertisement
-            parameters.includePeerToPeer = true
-            let service = NWListener.Service(name: ScrollNetworkProtocol.serviceName, type: ScrollNetworkProtocol.serviceType)
+            let l = try NWListener(
+                using: params,
+                on: NWEndpoint.Port(integerLiteral: ScrollNetworkProtocol.defaultPort)
+            )
+            l.service = NWListener.Service(
+                name: ScrollNetworkProtocol.serviceName,
+                type: ScrollNetworkProtocol.serviceType
+            )
 
-            let listener = try NWListener(using: parameters, on: NWEndpoint.Port(integerLiteral: ScrollNetworkProtocol.defaultPort))
-            listener.service = service
-
-            listener.stateUpdateHandler = { [weak self] state in
+            l.stateUpdateHandler = { [weak self] state in
                 Task { @MainActor [weak self] in
+                    guard let self else { return }
                     switch state {
                     case .ready:
-                        self?.isListening = true
-                        self?.onStateChanged?()
-                        print("🖥️ Mac listener ready on port \(ScrollNetworkProtocol.defaultPort)")
-                    case .failed(let error):
-                        print("🖥️ Mac listener failed: \(error)")
-                        self?.isListening = false
-                        self?.onStateChanged?()
-                        self?.restartListener()
+                        self.isListening = true
+                        self.onStateChanged?()
+                    case .failed:
+                        self.isListening = false
+                        self.onStateChanged?()
+                        self.restartAfterDelay()
                     case .cancelled:
-                        self?.isListening = false
-                        self?.onStateChanged?()
-                    default:
-                        break
+                        self.isListening = false
+                        self.onStateChanged?()
+                    default: break
                     }
                 }
             }
 
-            listener.newConnectionHandler = { [weak self] connection in
-                self?.handleNewConnection(connection)
+            l.newConnectionHandler = { [weak self] conn in
+                Task { @MainActor [weak self] in
+                    self?.accept(conn)
+                }
             }
 
-            listener.start(queue: queue)
-            self.listener = listener
-
+            l.start(queue: queue)
+            listener = l
+            _listenerForCleanup = l
         } catch {
-            print("🖥️ Failed to create listener: \(error)")
+            print("MacScrollNetworkListener: failed to start – \(error)")
         }
     }
 
-    @MainActor
-    private func restartListener() {
+    private func restartAfterDelay() {
         Task {
             try? await Task.sleep(for: .seconds(2))
+            listener = nil
+            _listenerForCleanup = nil
             startListening()
         }
     }
 
-    private nonisolated func handleNewConnection(_ connection: NWConnection) {
-        let clientID = "\(connection.endpoint)"
-        print("🖥️ New connection from: \(clientID)")
-
-        Task { @MainActor in
-            connectedClients.insert(clientID)
-            onStateChanged?()
-        }
-
-        connection.stateUpdateHandler = { [weak self] state in
+    private func accept(_ conn: NWConnection) {
+        let id = "\(conn.endpoint)"
+        conn.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
-                print("🖥️ Connection ready: \(clientID)")
-                self?.receiveMessagesNonisolated(from: connection)
-            case .failed(let error):
-                print("🖥️ Connection failed: \(error)")
                 Task { @MainActor [weak self] in
-                    self?.connectedClients.remove(clientID)
-                    self?.connections.removeAll { $0 === connection }
+                    self?.connectedClients.insert(id)
                     self?.onStateChanged?()
                 }
-            case .cancelled:
+                self?.startReceiving(from: conn, id: id)
+            case .failed, .cancelled:
                 Task { @MainActor [weak self] in
-                    self?.connectedClients.remove(clientID)
-                    self?.connections.removeAll { $0 === connection }
+                    self?.connectedClients.remove(id)
+                    self?.connections.removeValue(forKey: id)
+                    self?._connectionsForCleanup.removeAll { $0 === conn }
                     self?.onStateChanged?()
                 }
-            default:
-                break
+            default: break
             }
         }
-
-        connection.start(queue: queue)
-        Task { @MainActor [weak self] in
-            self?.connections.append(connection)
-        }
+        conn.start(queue: queue)
+        connections[id] = conn
+        _connectionsForCleanup.append(conn)
     }
 
-    private nonisolated func receiveMessagesNonisolated(from connection: NWConnection) {
-        // Read 4-byte length prefix first
-        connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { [weak self] data, _, isComplete, error in
-            if let error = error {
-                print("🖥️ Receive error: \(error)")
-                connection.cancel()
+    // UDP: one call = one complete datagram
+    nonisolated private func startReceiving(from conn: NWConnection, id: String) {
+        conn.receiveMessage { [weak self] data, _, _, error in
+            if let error {
+                if case .posix(let code) = error, code == .ECANCELED { return }
+                print("MacScrollNetworkListener: receive error – \(error)")
                 return
             }
-
-            guard let data = data, data.count == 4 else {
-                if !isComplete {
-                    self?.receiveMessagesNonisolated(from: connection)
-                }
-                return
-            }
-
-            var messageLengthRaw: UInt32 = 0
-            _ = withUnsafeMutableBytes(of: &messageLengthRaw) { rawBuffer in
-                data.copyBytes(to: rawBuffer, from: 0..<4)
-            }
-            let messageLength = UInt32(bigEndian: messageLengthRaw)
-
-            guard messageLength > 0 else {
-                if !isComplete {
-                    self?.receiveMessagesNonisolated(from: connection)
-                }
-                return
-            }
-
-            self?.receiveExactPayloadNonisolated(
-                from: connection,
-                expectedLength: Int(messageLength),
-                accumulated: Data()
-            ) { [weak self] messageData, payloadComplete, payloadError in
-                if let payloadError {
-                    print("🖥️ Message receive error: \(payloadError)")
-                    return
-                }
-
-                if let messageData {
-                    do {
-                        let command = try ScrollCommand(binaryData: messageData)
-                        Task { @MainActor [weak self] in
-                            self?.onCommandReceived?(command)
-                        }
-                    } catch {
-                        let versionByte = messageData.first.map(String.init) ?? "nil"
-                        print(
-                            "🖥️ Failed to decode command: \(error) " +
-                            "(payload=\(messageData.count) bytes, versionByte=\(versionByte))"
-                        )
+            if let data, !data.isEmpty {
+                if let cmd = try? ScrollCommand(wireData: data) {
+                    Task { @MainActor [weak self] in
+                        self?.onCommandReceived?(cmd)
                     }
                 }
-
-                if !payloadComplete {
-                    self?.receiveMessagesNonisolated(from: connection)
-                } else {
-                    connection.cancel()
-                }
             }
+            // Re-arm receive
+            self?.startReceiving(from: conn, id: id)
         }
     }
 
-    private nonisolated func receiveExactPayloadNonisolated(
-        from connection: NWConnection,
-        expectedLength: Int,
-        accumulated: Data,
-        completion: @escaping (_ payload: Data?, _ isComplete: Bool, _ error: NWError?) -> Void
-    ) {
-        let remaining = expectedLength - accumulated.count
-        guard remaining > 0 else {
-            completion(accumulated, false, nil)
-            return
-        }
-
-        connection.receive(
-            minimumIncompleteLength: 1,
-            maximumLength: remaining
-        ) { [weak self] chunk, _, isComplete, error in
-                if let error = error {
-                    completion(nil, isComplete, error)
-                    return
-                }
-
-                var updated = accumulated
-                if let chunk, !chunk.isEmpty {
-                    updated.append(chunk)
-                }
-
-                if updated.count >= expectedLength {
-                    completion(Data(updated.prefix(expectedLength)), isComplete, nil)
-                    return
-                }
-
-                guard !isComplete else {
-                    completion(nil, isComplete, nil)
-                    return
-                }
-
-                self?.receiveExactPayloadNonisolated(
-                    from: connection,
-                    expectedLength: expectedLength,
-                    accumulated: updated,
-                    completion: completion
-                )
-        }
-    }
-
-    @MainActor
     public func stopListening() {
         listener?.cancel()
         listener = nil
-        connections.forEach { $0.cancel() }
+        _listenerForCleanup = nil
+        connections.values.forEach { $0.cancel() }
         connections.removeAll()
+        _connectionsForCleanup.removeAll()
         isListening = false
         connectedClients.removeAll()
         onStateChanged?()
     }
 
-    nonisolated deinit {
-        listener?.cancel()
-        connections.forEach { $0.cancel() }
+    deinit {
+        _listenerForCleanup?.cancel()
+        _connectionsForCleanup.forEach { $0.cancel() }
     }
 }
 #endif
 
-// MARK: - iPhone Network Client
+// MARK: - iPhone UDP Client
+
 #if canImport(UIKit)
-import UIKit
 import Observation
 
 @MainActor
 @Observable
 public final class iPhoneScrollNetworkClient {
-    public private(set) var isConnected = false
+    public private(set) var isConnected:     Bool = false
     public private(set) var discoveredHosts: [NWBrowser.Result] = []
     public private(set) var currentHostName: String?
 
     private var connection: NWConnection?
-    private var browser: NWBrowser?
+    private var browser:    NWBrowser?
     private let queue = DispatchQueue(label: "com.scroll.iphone.network", qos: .userInteractive)
-    private var sendQueue: DispatchQueue = DispatchQueue(label: "com.scroll.iphone.send", qos: .userInteractive)
 
     public init() {}
 
     public func startDiscovery() {
         guard browser == nil else { return }
+        let params = NWParameters()
+        params.includePeerToPeer = true
+        let b = NWBrowser(for: .bonjour(type: ScrollNetworkProtocol.serviceType, domain: nil), using: params)
 
-        let parameters = NWParameters()
-        parameters.includePeerToPeer = true
-
-        let browser = NWBrowser(for: .bonjour(type: ScrollNetworkProtocol.serviceType, domain: nil), using: parameters)
-
-        browser.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case .ready:
-                print("📱 Browser ready")
-            case .failed(let error):
-                print("📱 Browser failed: \(error)")
-                Task { @MainActor [weak self] in
-                    self?.restartBrowser()
-                }
-            default:
-                break
+        b.stateUpdateHandler = { [weak self] state in
+            if case .failed = state {
+                Task { @MainActor [weak self] in self?.restartBrowser() }
             }
         }
-
-        browser.browseResultsChangedHandler = { [weak self] results, changes in
+        b.browseResultsChangedHandler = { [weak self] results, _ in
             Task { @MainActor [weak self] in
                 self?.discoveredHosts = Array(results)
-                print("📱 Discovered \(results.count) hosts")
             }
         }
-
-        browser.start(queue: queue)
-        self.browser = browser
-    }
-
-    private func restartBrowser() {
-        Task {
-            try? await Task.sleep(for: .seconds(2))
-            startDiscovery()
-        }
+        b.start(queue: queue)
+        browser = b
     }
 
     public func connectToHost(_ result: NWBrowser.Result) {
         disconnect()
-
-        let parameters = NWParameters.lowLatencyTCP()
-
-        let connection = NWConnection(to: result.endpoint, using: parameters)
-
-        connection.stateUpdateHandler = { [weak self] state in
+        let conn = NWConnection(to: result.endpoint, using: .scrollUDP())
+        conn.stateUpdateHandler = { [weak self] state in
             Task { @MainActor [weak self] in
+                guard let self else { return }
                 switch state {
                 case .ready:
-                    self?.isConnected = true
+                    self.isConnected = true
                     if case .service(let name, _, _, _) = result.endpoint {
-                        self?.currentHostName = name
+                        self.currentHostName = name
                     }
-                    print("📱 Connected to Mac")
-                case .failed(let error):
-                    print("📱 Connection failed: \(error)")
-                    self?.isConnected = false
-                    self?.currentHostName = nil
-                case .cancelled:
-                    self?.isConnected = false
-                    self?.currentHostName = nil
-                default:
-                    break
+                case .failed, .cancelled:
+                    self.isConnected = false
+                    self.currentHostName = nil
+                default: break
                 }
             }
         }
-
-        connection.start(queue: queue)
-        self.connection = connection
+        conn.start(queue: queue)
+        connection = conn
     }
 
+    // Fire-and-forget: UDP, no completion overhead on hot path
     public func sendCommand(_ command: ScrollCommand) {
-        guard let connection = connection, connection.state == .ready else {
-            return
-        }
-
-        sendQueue.async { [weak connection] in
-            let commandData = command.toBinaryData()
-
-            // Combine length prefix and data into single buffer for single send
-            var length = UInt32(commandData.count).bigEndian
-            var combinedData = Data(capacity: 4 + commandData.count)
-            combinedData.append(Data(bytes: &length, count: 4))
-            combinedData.append(commandData)
-
-            // Single send operation for minimal latency
-            connection?.send(content: combinedData, completion: .contentProcessed { error in
-                if let error = error {
-                    print("📱 Failed to send command: \(error)")
-                }
-            })
-        }
+        guard let conn = connection, conn.state == .ready else { return }
+        let data = command.toWireData()
+        conn.send(content: data, completion: .idempotent)
     }
 
     public func disconnect() {
@@ -389,6 +244,14 @@ public final class iPhoneScrollNetworkClient {
         browser?.cancel()
         browser = nil
         discoveredHosts.removeAll()
+    }
+
+    private func restartBrowser() {
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            browser = nil
+            startDiscovery()
+        }
     }
 
     @MainActor deinit {
