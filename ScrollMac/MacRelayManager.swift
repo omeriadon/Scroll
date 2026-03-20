@@ -48,28 +48,12 @@ final class MacHostManager {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
 
-                print(
-                    "🖥️ [PIPE] command seq=\(command.sequence) " +
-                    "delta=\(command.delta) vel=\(command.velocity) " +
-                    "trusted=\(self.isAccessibilityTrusted) enabled=\(self.isScrollingEnabled)"
-                )
-
-                // Refresh trust state opportunistically for diagnostics.
-                let latestTrust = self.accessibility.refreshTrusted()
-                if latestTrust != self.isAccessibilityTrusted {
-                    self.isAccessibilityTrusted = latestTrust
-                    print("🖥️ [PIPE] accessibility trust changed -> \(latestTrust)")
-                }
+                // Refresh trust state opportunistically.
+                self.isAccessibilityTrusted = self.accessibility.refreshTrusted()
 
                 // Execute scroll immediately if enabled
                 if self.isScrollingEnabled && self.isAccessibilityTrusted {
-                    print("🖥️ [PIPE] forwarding command to executor")
                     self.scrollExecutor.executeScrollCommand(command)
-                } else {
-                    print(
-                        "🖥️ [PIPE] blocked command; " +
-                        "enabled=\(self.isScrollingEnabled) trusted=\(self.isAccessibilityTrusted)"
-                    )
                 }
 
                 // Update UI in background task (lower priority)

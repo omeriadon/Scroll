@@ -74,4 +74,41 @@ public enum ScrollSettingsStore {
 #endif
         }
     }
+
+        public static var inputResolution: ScrollInputResolution {
+                get {
+#if canImport(Defaults)
+                        Defaults[.inputResolution]
+#else
+                        let raw = UserDefaults.standard.string(forKey: ScrollSettingsStoreKeys.inputResolution) ?? ScrollInputResolution.balanced.rawValue
+                        return ScrollInputResolution(rawValue: raw) ?? .balanced
+#endif
+                }
+                set {
+#if canImport(Defaults)
+                        Defaults[.inputResolution] = newValue
+#else
+                        UserDefaults.standard.set(newValue.rawValue, forKey: ScrollSettingsStoreKeys.inputResolution)
+#endif
+                }
+        }
+
+        public static var maxSendRateHz: Double {
+                get {
+#if canImport(Defaults)
+                        Defaults[.maxSendRateHz]
+#else
+                        let value = UserDefaults.standard.object(forKey: ScrollSettingsStoreKeys.maxSendRateHz) as? Double ?? 90.0
+                        return max(30.0, min(120.0, value))
+#endif
+                }
+                set {
+                        let value = max(30.0, min(120.0, newValue))
+#if canImport(Defaults)
+                        Defaults[.maxSendRateHz] = value
+#else
+                        UserDefaults.standard.set(value, forKey: ScrollSettingsStoreKeys.maxSendRateHz)
+#endif
+                }
+        }
 }

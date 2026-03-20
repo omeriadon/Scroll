@@ -73,23 +73,11 @@ public extension ScrollCommand {
             data.append(1)
         }
 
-        print(
-            "📦 Encode ScrollCommand " +
-            "v=\(protocolVersion) seq=\(sequence) bytes=\(data.count) " +
-            "delta=\(delta) velocity=\(velocity) " +
-            "rev=\(settings.revision) sens=\(settings.scrollSensitivity) " +
-            "invert=\(settings.invertScrollDirection) smooth=\(settings.smoothingMode.rawValue)"
-        )
-
         return data
     }
 
     init(binaryData: Data) throws {
-        let versionByte = binaryData.first.map(String.init) ?? "nil"
-        print("📥 Decode attempt payload=\(binaryData.count) versionByte=\(versionByte)")
-
         guard binaryData.count >= 33 else {
-            print("❌ Decode rejected: payload too small for legacy minimum (33)")
             throw ScrollCommandError.invalidBinaryData
         }
 
@@ -137,7 +125,6 @@ public extension ScrollCommand {
 
         // Legacy payload (v1): [version][sequence][delta][velocity][timestamp] (33 bytes)
         if version < 2 {
-            print("ℹ️ Decoding legacy command format (v\(version), 33-byte baseline)")
             let settings = SettingsSnapshot(
                 revision: 0,
                 updatedAt: timestamp,
@@ -158,7 +145,6 @@ public extension ScrollCommand {
         }
 
         guard binaryData.count >= 59 else {
-            print("❌ Decode rejected: v2+ payload too small (need >=59, got \(binaryData.count))")
             throw ScrollCommandError.invalidBinaryData
         }
 
@@ -197,14 +183,6 @@ public extension ScrollCommand {
             velocity: velocity,
             timestamp: timestamp,
             settings: settings
-        )
-
-        print(
-            "✅ Decode success " +
-            "v=\(version) seq=\(sequence) bytes=\(binaryData.count) " +
-            "delta=\(delta) velocity=\(velocity) " +
-            "rev=\(settings.revision) sens=\(settings.scrollSensitivity) " +
-            "invert=\(settings.invertScrollDirection) smooth=\(settings.smoothingMode.rawValue)"
         )
     }
 }

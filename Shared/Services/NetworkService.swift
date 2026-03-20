@@ -140,7 +140,6 @@ public final class MacScrollNetworkListener {
     private nonisolated func receiveMessagesNonisolated(from connection: NWConnection) {
         // Read 4-byte length prefix first
         connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { [weak self] data, _, isComplete, error in
-            print("🖥️ [RX] waiting header complete=\(isComplete)")
             if let error = error {
                 print("🖥️ Receive error: \(error)")
                 connection.cancel()
@@ -159,7 +158,6 @@ public final class MacScrollNetworkListener {
                 data.copyBytes(to: rawBuffer, from: 0..<4)
             }
             let messageLength = UInt32(bigEndian: messageLengthRaw)
-            print("🖥️ [RX] header length=\(messageLength)")
 
             guard messageLength > 0 else {
                 if !isComplete {
@@ -173,14 +171,12 @@ public final class MacScrollNetworkListener {
                 expectedLength: Int(messageLength),
                 accumulated: Data()
             ) { [weak self] messageData, payloadComplete, payloadError in
-                print("🖥️ [RX] payload callback complete=\(payloadComplete) err=\(String(describing: payloadError))")
                 if let payloadError {
                     print("🖥️ Message receive error: \(payloadError)")
                     return
                 }
 
                 if let messageData {
-                    print("🖥️ [RX] payload bytes=\(messageData.count)")
                     do {
                         let command = try ScrollCommand(binaryData: messageData)
                         Task { @MainActor [weak self] in
@@ -211,7 +207,6 @@ public final class MacScrollNetworkListener {
         completion: @escaping (_ payload: Data?, _ isComplete: Bool, _ error: NWError?) -> Void
     ) {
         let remaining = expectedLength - accumulated.count
-        print("🖥️ [RX] accumulate expected=\(expectedLength) current=\(accumulated.count) remaining=\(remaining)")
         guard remaining > 0 else {
             completion(accumulated, false, nil)
             return
@@ -229,9 +224,6 @@ public final class MacScrollNetworkListener {
                 var updated = accumulated
                 if let chunk, !chunk.isEmpty {
                     updated.append(chunk)
-                    print("🖥️ [RX] chunk bytes=\(chunk.count) updated=\(updated.count)/\(expectedLength)")
-                } else {
-                    print("🖥️ [RX] chunk empty isComplete=\(isComplete)")
                 }
 
                 if updated.count >= expectedLength {
@@ -365,7 +357,6 @@ public final class iPhoneScrollNetworkClient {
 
     public func sendCommand(_ command: ScrollCommand) {
         guard let connection = connection, connection.state == .ready else {
-            print("📱 [TX] skip send: no ready connection")
             return
         }
 
@@ -377,14 +368,11 @@ public final class iPhoneScrollNetworkClient {
             var combinedData = Data(capacity: 4 + commandData.count)
             combinedData.append(Data(bytes: &length, count: 4))
             combinedData.append(commandData)
-            print("📱 [TX] frame payload=\(commandData.count) total=\(combinedData.count)")
 
             // Single send operation for minimal latency
             connection?.send(content: combinedData, completion: .contentProcessed { error in
                 if let error = error {
                     print("📱 Failed to send command: \(error)")
-                } else {
-                    print("📱 [TX] send success payload=\(commandData.count)")
                 }
             })
         }

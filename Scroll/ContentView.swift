@@ -16,6 +16,8 @@ struct ContentView: View {
     @State private var sensitivity = ScrollSettingsStore.sensitivity
     @State private var invertDirection = ScrollSettingsStore.invertDirection
     @State private var smoothingMode = ScrollSettingsStore.smoothingMode
+    @State private var inputResolution = ScrollSettingsStore.inputResolution
+    @State private var maxSendRateHz = ScrollSettingsStore.maxSendRateHz
 
     var body: some View {
         NavigationStack {
@@ -67,7 +69,8 @@ struct ContentView: View {
 
                 scrollPadViewModel.updateInteraction(
                     location: value.location,
-                    translationY: value.translation.height
+                    translationY: value.translation.height,
+                    minimumDeltaStep: inputResolution.quantizationStep
                 ) { delta, velocity in
                     connectivityManager.sendScrollDelta(delta: delta, velocity: velocity)
                 }
@@ -128,6 +131,24 @@ struct ContentView: View {
                         Text("LINEAR").tag(ScrollSmoothingMode.linear)
                     }
                     .pickerStyle(.segmented)
+                }
+
+                Section("Performance") {
+                    Picker("RESOLUTION", selection: bindingForInputResolution) {
+                        ForEach(ScrollInputResolution.allCases, id: \.self) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("SEND RATE")
+                            .font(.system(.caption, design: .monospaced).weight(.semibold))
+                        Slider(value: bindingForMaxSendRateHz, in: 30...120, step: 10)
+                        Text("\(Int(maxSendRateHz)) HZ")
+                            .font(.system(.caption, design: .monospaced).weight(.bold))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
                 }
 
                 Section("Mac Hosts") {
@@ -266,10 +287,38 @@ struct ContentView: View {
         )
     }
 
+    private var bindingForInputResolution: Binding<ScrollInputResolution> {
+        Binding(
+            get: { inputResolution },
+            set: { newValue in
+                inputResolution = newValue
+                connectivityManager.updatePerformanceSettings(
+                    inputResolution: newValue,
+                    maxSendRateHz: maxSendRateHz
+                )
+            }
+        )
+    }
+
+    private var bindingForMaxSendRateHz: Binding<Double> {
+        Binding(
+            get: { maxSendRateHz },
+            set: { newValue in
+                maxSendRateHz = newValue
+                connectivityManager.updatePerformanceSettings(
+                    inputResolution: inputResolution,
+                    maxSendRateHz: newValue
+                )
+            }
+        )
+    }
+
     private func syncLocalStateFromDefaults() {
         sensitivity = ScrollSettingsStore.sensitivity
         invertDirection = ScrollSettingsStore.invertDirection
         smoothingMode = ScrollSettingsStore.smoothingMode
+        inputResolution = ScrollSettingsStore.inputResolution
+        maxSendRateHz = ScrollSettingsStore.maxSendRateHz
     }
 }
 

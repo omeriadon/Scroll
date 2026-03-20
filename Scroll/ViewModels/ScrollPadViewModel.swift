@@ -19,6 +19,7 @@ final class ScrollPadViewModel {
     func updateInteraction(
         location: CGPoint,
         translationY: CGFloat,
+        minimumDeltaStep: Double,
         sendScroll: (_ delta: Double, _ velocity: Double) -> Void
     ) {
         touchLocation = location
@@ -31,12 +32,14 @@ final class ScrollPadViewModel {
         lastSampleTime = now
 
         // Convert points to a normalized gesture delta.
-        let delta = Double(incrementalTranslation / 90.0)
+        let rawDelta = Double(incrementalTranslation / 90.0)
+        let step = max(minimumDeltaStep, 0.0005)
+        let delta = (rawDelta / step).rounded(.toNearestOrAwayFromZero) * step
 
         // Velocity normalized to delta units per second.
         let velocity = delta / timeDelta
 
-        guard abs(delta) > 0.0001 else { return }
+        guard abs(delta) >= step else { return }
         sendScroll(delta, velocity)
     }
 
