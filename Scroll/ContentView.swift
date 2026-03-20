@@ -47,7 +47,9 @@ struct ContentView: View {
 				.ignoresSafeArea()
 
 				VStack(spacing: 16) {
+					#if DEBUG
 					diagnosticsStrip
+					#endif
 
 					Spacer()
 
