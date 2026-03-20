@@ -1,17 +1,14 @@
-//
-//  ScrollApp.swift
-//  Scroll
-//
-//  Created by Adon Omeri on 18/3/2026.
-//
-
 import SwiftUI
 
 @main
 struct ScrollApp: App {
+    @State private var connectivityManager = PhoneConnectivityManager.shared
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(connectivityManager)
         }
     }
 }
+
