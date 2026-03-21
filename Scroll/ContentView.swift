@@ -9,6 +9,8 @@ import ColorfulX
 import Network
 import SwiftUI
 
+// MARK: - Adaptive Sheet Modifier
+
 struct ContentView: View {
 	@Environment(PhoneConnectivityManager.self) private var connectivityManager
 	@State private var scrollPadViewModel = ScrollPadViewModel()
@@ -29,7 +31,7 @@ struct ContentView: View {
 	@State private var bias: Double = 0.01
 	@State private var noise: Double = 40.0
 	@State private var transition: Double = 3.5
-	@State private var frameLimit: Int = 60
+	@State private var frameLimit: Int = 120
 	@State private var renderScale: Double = 1.0
 
 	var body: some View {
@@ -44,23 +46,19 @@ struct ContentView: View {
 					frameLimit: $frameLimit,
 					renderScale: $renderScale
 				)
-				.ignoresSafeArea()
 
-				VStack(spacing: 16) {
-					#if DEBUG
-					diagnosticsStrip
-					#endif
-
+				VStack {
 					Spacer()
+						.frame(height: 130)
 
 					ScrollPadView(touchLocation: scrollPadViewModel.touchLocation)
 						.gesture(scrollDragGesture)
 						.accessibilityLabel("Scrolling pad")
 						.accessibilityHint("Drag up or down with one finger to scroll your Mac")
 						.padding(15)
-						.ignoresSafeArea()
 				}
 			}
+			.ignoresSafeArea()
 			.toolbar {
 				ToolbarItem(placement: .topBarLeading) {
 					Button {
@@ -77,7 +75,7 @@ struct ContentView: View {
 					.buttonStyle(.plain)
 				}
 				.sharedBackgroundVisibility(.hidden)
-				.matchedTransitionSource(id: "thing2", in: namespace)
+				.matchedTransitionSource(id: "connect", in: namespace)
 
 				ToolbarItem(placement: .topBarTrailing) {
 					Button {
@@ -86,30 +84,62 @@ struct ContentView: View {
 						Label("Settings", systemImage: "slider.horizontal.3")
 					}
 				}
-				.matchedTransitionSource(id: "thing", in: namespace)
-
-				ToolbarItem(placement: .title) {
-					Text("Scroll")
-						.fontDesign(.monospaced)
+				.matchedTransitionSource(id: "settings", in: namespace)
+			}
+			.popover(isPresented: $isSettingsPresented) {
+				settingsSheet
+					.presentationDetents([.fraction(0.6), .large])
+					.presentationContentInteraction(.resizes)
+					.navigationTransition(
+						.zoom(sourceID: "settings", in: namespace)
+					)
+			}
+			.popover(isPresented: $isConnectionPresented) {
+				connectView
+					.presentationDetents([.fraction(0.7), .large])
+					.presentationContentInteraction(.scrolls)
+					.navigationTransition(
+						.zoom(sourceID: "connect", in: namespace)
+					)
+			}
+			.onAppear {
+				syncLocalStateFromDefaults()
+				// Give discovery time to find hosts before auto-connecting
+				Task {
+					try? await Task.sleep(for: .milliseconds(500))
+					connectivityManager.checkAutoConnect()
 				}
 			}
-			.sheet(isPresented: $isSettingsPresented) {
-				settingsSheet
-					.presentationDetents([.medium, .large])
-					.presentationDragIndicator(.hidden)
-					.navigationTransition(
-						.zoom(sourceID: "thing", in: namespace)
-					)
+			.alert("Unpaired", isPresented: .init(
+				get: { connectivityManager.wasUnpaired },
+				set: { if !$0 { connectivityManager.clearUnpairedFlag() } }
+			)) {
+				Button("OK") { connectivityManager.clearUnpairedFlag() }
+			} message: {
+				Text("The Mac has removed this device from its paired list.")
 			}
-			.sheet(isPresented: $isConnectionPresented) {
-				connectView
-					.presentationDetents([.medium, .large])
-					.presentationDragIndicator(.hidden)
-					.navigationTransition(
-						.zoom(sourceID: "thing2", in: namespace)
-					)
+			.alert("Forget this Mac?", isPresented: $showForgetAlert) {
+				Button("Cancel", role: .cancel) {}
+				Button("Forget", role: .destructive) {
+					connectivityManager.forgetLastMac()
+				}
+			} message: {
+				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
 			}
-			.onAppear(perform: syncLocalStateFromDefaults)
+			.alert("Rename Device", isPresented: $showDeviceNameAlert) {
+				TextField("Name", text: $editingDeviceName)
+				Button("Cancel", role: .cancel) {}
+				Button("Save", role: .confirm) {
+					let trimmed = editingDeviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+					if !trimmed.isEmpty {
+						connectivityManager.deviceName = trimmed
+						connectivityManager.forgetLastMac()
+						isConnectionPresented = true
+					}
+				}
+			} message: {
+				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
+			}
 		}
 	}
 
@@ -133,8 +163,12 @@ struct ContentView: View {
 			}
 	}
 
+	@State private var showDeviceNameAlert = false
+	@State private var editingDeviceName = ""
+	@State private var showForgetAlert = false
+
 	private var settingsSheet: some View {
-		return NavigationStack {
+		NavigationStack {
 			List {
 				Section("Scroll") {
 					Slider(value: bindingForSensitivity, in: 0.2...3.0) {
@@ -229,43 +263,134 @@ struct ContentView: View {
 
 	private var connectView: some View {
 		let hosts = connectivityManager.discoveredHosts
+		let pairedMac = connectivityManager.lastConnectedMac
+		let currentMac = connectivityManager.currentMac
+		let isConnected = connectivityManager.isConnectedToMac
 
 		return NavigationStack {
 			List {
-				if hosts.isEmpty {
-					Text("Searching for hosts…")
-						.foregroundStyle(.secondary)
-				} else {
-					ForEach(Array(hosts.enumerated()), id: \.offset) { _, host in
-						Button {
-							withAnimation(.easeInOut) {
-								if connectivityManager.isConnectedToMac {
+				Section("This Device") {
+					Button {
+						editingDeviceName = connectivityManager.deviceName
+						isConnectionPresented = false
+						showDeviceNameAlert = true
+					} label: {
+						HStack {
+							Text("Name")
+							Spacer()
+							Text(connectivityManager.deviceName)
+								.foregroundStyle(.secondary)
+							Image(systemName: "chevron.right")
+								.foregroundStyle(.tertiary)
+								.font(.caption)
+						}
+					}
+				}
+
+				// Connected Mac section (always on top when connected)
+				if isConnected, let current = currentMac {
+					Section {
+						VStack(alignment: .leading, spacing: 12) {
+							HStack {
+								VStack(alignment: .leading, spacing: 2) {
+									Text(current.displayName)
+										.font(.headline)
+									Text("Connected")
+										.font(.caption)
+										.foregroundStyle(.green)
+								}
+							}
+
+							HStack(spacing: 12) {
+								Button {
 									connectivityManager.disconnect()
-								} else {
-									connectivityManager.connectToHost(host)
-									Task {
-										try? await Task.sleep(for: .seconds(0.6))
-										isConnectionPresented = false
+								} label: {
+									Text("Disconnect")
+										.frame(maxWidth: .infinity)
+								}
+								.buttonStyle(.borderedProminent)
+								.tint(.red)
+
+								Button {
+									showForgetAlert = true
+								} label: {
+									Text("Forget")
+										.frame(maxWidth: .infinity)
+								}
+								.buttonStyle(.bordered)
+								.tint(.red)
+							}
+						}
+						.padding(.vertical, 4)
+					}
+				}
+
+				// Pairing state section
+				if !isConnected {
+					if connectivityManager.pairingState == .pending {
+						Section {
+							HStack {
+								ProgressView()
+									.padding(.trailing, 8)
+								Text("Waiting for approval…")
+									.foregroundStyle(.orange)
+							}
+						}
+					} else if connectivityManager.pairingState == .rejected {
+						Section {
+							HStack {
+								Image(systemName: "xmark.circle.fill")
+									.foregroundStyle(.red)
+								Text("Connection rejected by Mac")
+							}
+						}
+					}
+				}
+
+				// Available Macs section
+				Section {
+					if hosts.isEmpty {
+						HStack {
+							ProgressView()
+								.padding(.trailing, 8)
+							Text("Searching…")
+								.foregroundStyle(.secondary)
+						}
+					} else {
+						ForEach(hosts) { mac in
+							let isThisConnected = currentMac?.id == mac.id && isConnected
+							let isPaired = mac.deviceInfo?.id == pairedMac?.id
+
+							if !isThisConnected {
+								Button {
+									withAnimation(.easeInOut) {
+										connectivityManager.connectToHost(mac.browseResult)
+									}
+								} label: {
+									HStack {
+										VStack(alignment: .leading, spacing: 2) {
+											Text(mac.deviceInfo?.name ?? mac.displayName)
+												.font(.body)
+											if isPaired {
+												Text("Paired")
+													.font(.caption)
+													.foregroundStyle(.secondary)
+											}
+										}
+										Spacer()
+										if connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id {
+											ProgressView()
+										} else {
+											Image(systemName: "arrow.right.circle")
+												.foregroundStyle(.blue)
+										}
 									}
 								}
 							}
-						} label: {
-							HStack {
-								Text(hostDisplayName(for: host))
-									.font(.title2)
-
-								Spacer()
-
-								Image(systemName: connectivityManager.isConnectedToMac ? "checkmark" : "arrow.right")
-									.contentTransition(.symbolEffect(.replace.upUp.wholeSymbol, options: .nonRepeating))
-									.imageScale(.large)
-									.bold()
-							}
-							.foregroundStyle(connectivityManager.isConnectedToMac ? .green : .blue)
-							.animation(.easeInOut, value: connectivityManager.isConnectedToMac)
-
 						}
 					}
+				} header: {
+					Text("Available Macs")
 				}
 			}
 			.toolbar {
@@ -273,50 +398,13 @@ struct ContentView: View {
 					Text("Connect to Mac")
 						.fontDesign(.monospaced)
 				}
-
-				ToolbarItem(placement: .topBarTrailing) {
+				ToolbarItem(placement: .confirmationAction) {
 					Button(role: .confirm) {
 						isConnectionPresented = false
 					}
 				}
 			}
 		}
-	}
-
-	private var diagnosticsStrip: some View {
-		HStack(spacing: 14) {
-			Text(lastSequenceText)
-			Text(lastDeltaText)
-			Text(lastVelocityText)
-		}
-		.font(.system(.caption, design: .monospaced))
-		.foregroundStyle(.white.opacity(0.75))
-		.padding(.vertical, 8)
-		.padding(.horizontal, 14)
-		.background(Color.black.opacity(0.2), in: Capsule())
-	}
-
-	private var lastSequenceText: String {
-		guard let command = connectivityManager.lastCommand else { return "SEQ: --" }
-		return "SEQ: \(command.sequence)"
-	}
-
-	private var lastDeltaText: String {
-		guard let command = connectivityManager.lastCommand else { return "Δ: --" }
-		return "Δ: \(command.delta.formatted(.number.precision(.fractionLength(3))))"
-	}
-
-	private var lastVelocityText: String {
-		guard let command = connectivityManager.lastCommand else { return "VEL: --" }
-		return "VEL: \(command.velocity.formatted(.number.precision(.fractionLength(3))))"
-	}
-
-	private func hostDisplayName(for result: NWBrowser.Result) -> String {
-		if case .service(let name, _, _, _) = result.endpoint {
-			return name
-		}
-
-		return String(describing: result.endpoint)
 	}
 
 	private var bindingForSensitivity: Binding<Double> {

@@ -9,6 +9,7 @@ final class PhoneConnectivityManager {
 	static let shared = PhoneConnectivityManager()
 
 	private(set) var lastCommand: ScrollCommand?
+	private(set) var wasUnpaired = false  // Flag to show unpaired alert
 
 	private var nextSequence: Int64 = 1
 	private let networkClient = iPhoneScrollNetworkClient()
@@ -18,31 +19,59 @@ final class PhoneConnectivityManager {
 	private var pendingVelocityTotal: Double = 0
 	private var pendingSampleCount:   Int    = 0
 	private var lastSendTime:         Double = 0   // CACurrentMediaTime
+	
+	/// This device's name
+	var deviceName: String {
+		get { DeviceIdentity.getDeviceName() }
+		set { DeviceIdentity.setDeviceName(newValue) }
+	}
 
 	private init() {
 		networkClient.startDiscovery()
+		networkClient.onUnpaired = { [weak self] _ in
+			self?.wasUnpaired = true
+		}
 	}
 
 	// MARK: - Public API
 
 	var macConnectionStatus: String {
-		if networkClient.isConnected, let name = networkClient.currentHostName {
-			return "Connected"
-		} else if networkClient.isConnected {
-			return "Connected"
+		if networkClient.isPaired, let name = networkClient.currentHostName {
+			return name
+		} else if networkClient.isConnected && !networkClient.isPaired {
+			return "Pairing…"
 		} else {
 			return "Not Connected"
 		}
 	}
+	
+	var pairingState: DiscoveredMac.PairingState {
+		networkClient.pairingState
+	}
 
-	var discoveredHosts: [NWBrowser.Result] { networkClient.discoveredHosts }
-	var isConnectedToMac: Bool              { networkClient.isConnected }
+	var discoveredHosts: [DiscoveredMac] { networkClient.discoveredHosts }
+	var isConnectedToMac: Bool { networkClient.isPaired }
+	var currentMac: DiscoveredMac? { networkClient.currentMac }
+	var lastConnectedMac: DeviceInfo? { Defaults[.lastConnectedMac] }
+	
+	func checkAutoConnect() {
+		networkClient.checkAutoConnect()
+	}
+	
+	func clearUnpairedFlag() {
+		wasUnpaired = false
+	}
 
 	func connectToHost(_ result: NWBrowser.Result) { networkClient.connectToHost(result) }
 
 	func disconnect() {
 		clearPending()
 		networkClient.disconnect()
+	}
+	
+	func forgetLastMac() {
+		clearPending()
+		networkClient.forgetLastMac()
 	}
 
 	func updateSettings(sensitivity: Double, inverted: Bool, smoothingMode: ScrollSmoothingMode) {

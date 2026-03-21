@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarView: View {
     @Environment(MacHostManager.self) private var hostManager
@@ -24,13 +25,6 @@ struct MenuBarView: View {
 
             Toggle("Enable crown scrolling", isOn: $hostManager.isScrollingEnabled)
 
-            HStack {
-                Text("Last command")
-                Spacer()
-                Text(hostManager.lastCommandSummary)
-                    .foregroundStyle(.secondary)
-            }
-
             Divider()
 
             if !hostManager.isAccessibilityTrusted {
@@ -52,6 +46,13 @@ struct MenuBarView: View {
 
             Button("Open Settings") {
                 openWindow(id: "scroll-settings")
+                NSApp.activate(ignoringOtherApps: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    for window in NSApp.windows where window.identifier?.rawValue == "scroll-settings" {
+                        window.makeKeyAndOrderFront(nil)
+                        break
+                    }
+                }
             }
             .buttonStyle(.bordered)
         }

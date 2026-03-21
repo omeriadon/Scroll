@@ -27,20 +27,22 @@ public protocol _DefaultsObservation: AnyObject {
 extension Defaults {
 	public typealias Observation = _DefaultsObservation
 
-	public enum ObservationOption: Sendable {
+	public enum ObservationOption: Int, Sendable, Hashable {
 		/**
 		Whether a notification should be sent to the observer immediately, before the observer registration method even returns.
 		*/
-		case initial
+		case initial = 0
 
 		/**
 		Whether separate notifications should be sent to the observer before and after each change, instead of a single notification after the change.
 		*/
-		case prior
+		case prior = 1
 	}
 
 	public typealias ObservationOptions = Set<ObservationOption>
+}
 
+extension Defaults {
 	private static func deserialize<Value: Serializable>(_ value: Any?, to type: Value.Type) -> Value? {
 		guard
 			let value,
@@ -348,6 +350,7 @@ extension Defaults {
 
 	- Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
 	*/
+	@MainActor
 	public static func observe<Value: Serializable>(
 		_ key: Key<Value>,
 		options: ObservationOptions = [.initial],
@@ -378,6 +381,7 @@ extension Defaults {
 
 	- Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
 	*/
+	@MainActor
 	public static func observe(
 		keys: _AnyKey...,
 		options: ObservationOptions = [.initial],
@@ -413,20 +417,3 @@ extension Defaults.ObservationOptions {
 
 extension Defaults.KeyChange: Equatable where Value: Equatable {}
 extension Defaults.KeyChange: Sendable where Value: Sendable {}
-
-// Explicit nonisolated Hashable conformance for Swift 6 compatibility
-extension Defaults.ObservationOption: Hashable {
-	nonisolated public func hash(into hasher: inout Hasher) {
-		switch self {
-		case .initial: hasher.combine(0)
-		case .prior: hasher.combine(1)
-		}
-	}
-	
-	nonisolated public static func == (lhs: Self, rhs: Self) -> Bool {
-		switch (lhs, rhs) {
-		case (.initial, .initial), (.prior, .prior): return true
-		default: return false
-		}
-	}
-}
