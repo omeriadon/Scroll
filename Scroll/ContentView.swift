@@ -98,25 +98,22 @@ struct ContentView: View {
 			}
 			.popover(isPresented: $isSettingsPresented) {
 				settingsSheet
-					.presentationDetents([.fraction(0.6), .large])
-					.presentationContentInteraction(.resizes)
+					.presentationDetents([.fraction(0.8)])
 					.navigationTransition(
 						.zoom(sourceID: "settings", in: namespace)
 					)
 			}
 			.popover(isPresented: $isConnectionPresented) {
 				connectView
-					.presentationDetents([.fraction(0.7), .large])
-					.presentationContentInteraction(.scrolls)
+					.presentationDetents([.fraction(0.8)])
 					.navigationTransition(
 						.zoom(sourceID: "connect", in: namespace)
 					)
 			}
 			.onAppear {
 				syncLocalStateFromDefaults()
-				// Give discovery time to find hosts before auto-connecting
 				Task {
-					try? await Task.sleep(for: .milliseconds(500))
+					try? await Task.sleep(for: .milliseconds(200))
 					connectivityManager.checkAutoConnect()
 				}
 			}
