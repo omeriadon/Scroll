@@ -269,91 +269,89 @@ struct ContentView: View {
 		let isConnected = connectivityManager.isConnectedToMac
 
 		return NavigationStack {
-			Group {
-				GroupBox {
-					HStack {
-						Label("Name", systemImage: "iphone")
-						Spacer()
-
-						Button {
-							editingDeviceName = connectivityManager.deviceName
-							showDeviceNameAlert = true
-						} label: {
-							HStack {
-								Text(connectivityManager.deviceName)
-								Image(systemName: "chevron.right")
-							}
-						}
-						.buttonStyle(.glass)
-					}
-					.padding(.top, 10)
-				} label: {
-					Text("This iPhone")
-						.textCase(.uppercase)
-						.foregroundStyle(.secondary)
-						.font(.caption)
-				}
-				.clipShape(RoundedRectangle(cornerRadius: 30))
-				.containerShape(
-					.rect(cornerRadius: 30)
-				)
-
-				PairingStatusView(
-					isConnected: isConnected,
-					currentMac: currentMac,
-					pairingState: connectivityManager.pairingState,
-					onDisconnect: { connectivityManager.disconnect() },
-					onForget: { showForgetAlert = true }
-				)
-			}
-			.padding(.horizontal)
-
 			Form {
 				Section("Available Macs") {
-					if hosts.isEmpty {
-						HStack {
-							ProgressView()
-								.padding(.trailing, 8)
-							Text("Searching…")
-								.foregroundStyle(.secondary)
-						}
-					} else {
-						ForEach(hosts) { mac in
-							let isThisConnected = currentMac?.id == mac.id && isConnected
-							let isPaired = mac.deviceInfo?.id == pairedMac?.id
+					ForEach(hosts) { mac in
+						let isThisConnected = currentMac?.id == mac.id && isConnected
+						let isPaired = mac.deviceInfo?.id == pairedMac?.id
 
-							if !isThisConnected {
-								Button {
-									withAnimation(.easeInOut) {
-										connectivityManager.connectToHost(mac.browseResult)
-									}
-								} label: {
-									HStack {
-										VStack(alignment: .leading, spacing: 2) {
-											HStack(alignment: .center) {
-												Image(systemName: "macbook")
-													.imageScale(.large)
-												VStack(alignment: .leading) {
-													Text(mac.deviceInfo?.name ?? mac.displayName)
-													if isPaired {
-														Text("Paired")
-															.font(.caption)
-															.foregroundStyle(.secondary)
-													}
+						if !isThisConnected {
+							Button {
+								withAnimation(.easeInOut) {
+									connectivityManager.connectToHost(mac.browseResult)
+								}
+							} label: {
+								HStack {
+									VStack(alignment: .leading, spacing: 2) {
+										HStack(alignment: .center) {
+											Image(systemName: "macbook")
+												.imageScale(.large)
+											VStack(alignment: .leading) {
+												Text(mac.deviceInfo?.name ?? mac.displayName)
+												if isPaired {
+													Text("Paired")
+														.font(.caption)
 												}
 											}
 										}
-										Spacer()
-										if connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id {
-											ProgressView()
-												.transition(.blurReplace)
-										}
+									}
+									Spacer()
+									if connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id {
+										ProgressView()
+											.transition(.blurReplace)
 									}
 								}
+								.animation(.easeInOut, value: connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id)
 							}
 						}
 					}
+					HStack {
+						ProgressView()
+							.padding(.trailing, 8)
+						Text("Searching…")
+							.foregroundStyle(.secondary)
+					}
 				}
+			}
+			.safeAreaBar(edge: .top, alignment: .center, spacing: 10) {
+				VStack {
+					GroupBox {
+						HStack {
+							Label("Name", systemImage: "iphone")
+							Spacer()
+
+							Button {
+								editingDeviceName = connectivityManager.deviceName
+								showDeviceNameAlert = true
+							} label: {
+								HStack {
+									Text(connectivityManager.deviceName)
+									Image(systemName: "chevron.right")
+								}
+							}
+							.buttonStyle(.glass)
+						}
+						.padding(.top, 10)
+					} label: {
+						Text("This iPhone")
+							.textCase(.uppercase)
+							.foregroundStyle(.secondary)
+							.font(.caption)
+					}
+					.clipShape(RoundedRectangle(cornerRadius: 30))
+					.containerShape(
+						.rect(cornerRadius: 30)
+					)
+
+					PairingStatusView(
+						isConnected: isConnected,
+						currentMac: currentMac,
+						pairingState: connectivityManager.pairingState,
+						onDisconnect: { connectivityManager.disconnect() },
+						onForget: { showForgetAlert = true }
+					)
+				}
+				.padding(.horizontal)
 			}
 			.animation(.easeInOut, value: isConnected)
 			.alert("Forget this Mac?", isPresented: $showForgetAlert) {
