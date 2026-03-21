@@ -34,6 +34,9 @@ struct ContentView: View {
 	@State private var frameLimit: Int = 120
 	@State private var renderScale: Double = 1.0
 
+	@State private var sensitivityTask: Task<Void, Never>?
+	@State private var maxSendRateTask: Task<Void, Never>?
+
 	var body: some View {
 		NavigationStack {
 			ZStack {
@@ -115,7 +118,8 @@ struct ContentView: View {
 			}
 			.popover(isPresented: $isSettingsPresented) {
 				settingsSheet
-					.presentationDetents([.fraction(0.9)])
+					.scrollBounceBehavior(.basedOnSize)
+					.presentationDetents([.fraction(0.7)])
 					.presentationDragIndicator(.hidden)
 					.navigationTransition(
 						.zoom(sourceID: "settings", in: namespace)
@@ -175,27 +179,6 @@ struct ContentView: View {
 		NavigationStack {
 			Form {
 				Section("Scroll") {
-					Slider(value: bindingForSensitivity, in: 0.2 ... 3.0) {
-						Text("SPEED")
-							.font(.system(.caption, design: .monospaced).weight(.semibold))
-					} minimumValueLabel: {
-						AnyView(EmptyView())
-					} maximumValueLabel: {
-						AnyView(
-							Text(sensitivity.formatted(.number.precision(.fractionLength(2))))
-								.contentTransition(.numericText())
-								.animation(.easeInOut, value: sensitivity)
-								.font(.system(.title3, design: .monospaced))
-						)
-					}
-					.onChange(of: sensitivity) { oldValue, newValue in
-						let stepped = (newValue * 10).rounded()
-						let oldStepped = (oldValue * 10).rounded()
-						if stepped != oldStepped {
-							UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-						}
-					}
-
 					Toggle(isOn: bindingForInvertDirection) {
 						Text("Invert")
 							.fontDesign(.monospaced)
@@ -212,6 +195,36 @@ struct ContentView: View {
 						UIImpactFeedbackGenerator(style: .medium).impactOccurred()
 					}
 					.pickerStyle(.segmented)
+
+					Slider(value: $sensitivity, in: 0.05 ... 5.0, step: 0.495) {
+						Text("SPEED")
+							.font(.system(.caption, design: .monospaced).weight(.semibold))
+					} minimumValueLabel: {
+						AnyView(EmptyView())
+					} maximumValueLabel: {
+						AnyView(
+							Text("\(sensitivity.formatted(.number.precision(.fractionLength(2))))×")
+								.contentTransition(.numericText())
+								.animation(.easeInOut, value: sensitivity)
+								.font(.system(.title3, design: .monospaced))
+						)
+					}
+					.onChange(of: sensitivity) { oldValue, newValue in
+						sensitivityTask?.cancel()
+						sensitivityTask = Task {
+							try? await Task.sleep(for: .milliseconds(50))
+							connectivityManager.updateSettings(
+								sensitivity: newValue,
+								inverted: invertDirection,
+								smoothingMode: smoothingMode
+							)
+						}
+						let stepped = (newValue * 10).rounded()
+						let oldStepped = (oldValue * 10).rounded()
+						if stepped != oldStepped {
+							UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+						}
+					}
 				}
 
 				Section("Performance") {
@@ -225,24 +238,32 @@ struct ContentView: View {
 					}
 					.pickerStyle(.segmented)
 
-					Slider(value: bindingForMaxSendRateHz, in: 30 ... 120, step: 10) {
+					Slider(value: $maxSendRateHz, in: 30 ... 120, step: 10) {
 						Text("Send Rate")
 							.font(.system(.caption, design: .monospaced).weight(.semibold))
 					} minimumValueLabel: {
 						AnyView(EmptyView())
 					} maximumValueLabel: {
 						AnyView(
-							Text(String(format: "%3d HZ", Int(maxSendRateHz)))
+							Text(String(format: "%3d Hz", Int(maxSendRateHz)))
 								.contentTransition(.numericText())
 								.animation(.easeInOut, value: maxSendRateHz)
 								.font(.system(.title3, design: .monospaced))
 						)
 					}
 					.onChange(of: maxSendRateHz) { oldValue, newValue in
+						maxSendRateTask?.cancel()
+						sensitivityTask = Task {
+							try? await Task.sleep(for: .milliseconds(50))
+							connectivityManager.updatePerformanceSettings(
+								inputResolution: inputResolution,
+								maxSendRateHz: newValue
+							)
+						}
 						let stepped = (newValue * 10).rounded()
 						let oldStepped = (oldValue * 10).rounded()
 						if stepped != oldStepped {
-							UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+							UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
 						}
 					}
 				}
@@ -267,8 +288,8 @@ struct ContentView: View {
 		let pairedMac = connectivityManager.lastConnectedMac
 		let currentMac = connectivityManager.currentMac
 		let isConnected = connectivityManager.isConnectedToMac
-		
-		return GeometryReader { proxy in
+
+		return GeometryReader { _ in
 			ZStack {
 				NavigationStack {
 					List {
@@ -276,7 +297,7 @@ struct ContentView: View {
 							ForEach(hosts) { mac in
 								let isThisConnected = currentMac?.id == mac.id && isConnected
 								let isPaired = mac.deviceInfo?.id == pairedMac?.id
-								
+
 								if !isThisConnected {
 									Button {
 										withAnimation(.easeInOut) {
@@ -308,9 +329,6 @@ struct ContentView: View {
 									}
 								}
 							}
-							ForEach(1 ... 50, id: \.self) { number in
-								Text("Item \(number)")
-							}
 						} header: {
 							Label {
 								Text("Available Macs")
@@ -322,17 +340,6 @@ struct ContentView: View {
 					}
 					.scrollBounceBehavior(.basedOnSize)
 					.animation(.easeInOut, value: isConnected)
-//					.toolbar {
-//						ToolbarItem(placement: .title) {
-//							Text("Connect to Mac")
-//								.fontDesign(.monospaced)
-//						}
-//						ToolbarItem(placement: .confirmationAction) {
-//							Button(role: .confirm) {
-//								isConnectionPresented = false
-//							}
-//						}
-//					}
 					.alert("Forget this Mac?", isPresented: $showForgetAlert) {
 						Button("Cancel", role: .cancel) {}
 						Button("Forget", role: .destructive) {
@@ -357,66 +364,52 @@ struct ContentView: View {
 					} message: {
 						Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
 					}
-				}
-				.safeAreaBar(edge: .top, alignment: .center, spacing: 0) {
-					GroupBox {
-						HStack {
-							Label("Name", systemImage: "iphone")
-							Spacer()
-							Button {
-								editingDeviceName = connectivityManager.deviceName
-								showDeviceNameAlert = true
-							} label: {
-								HStack {
-									Text(connectivityManager.deviceName)
-									Image(systemName: "chevron.right")
+					.safeAreaBar(edge: .top, alignment: .center, spacing: 0) {
+						GroupBox {
+							HStack {
+								Label("Name", systemImage: "iphone")
+								Spacer()
+								Button {
+									editingDeviceName = connectivityManager.deviceName
+									showDeviceNameAlert = true
+								} label: {
+									HStack {
+										Text(connectivityManager.deviceName)
+										Image(systemName: "chevron.right")
+									}
 								}
+								.buttonStyle(.glass)
 							}
-							.buttonStyle(.glass)
+							.padding(.top, 10)
+						} label: {
+							Text("This iPhone")
+								.textCase(.uppercase)
+								.foregroundStyle(.secondary)
+								.font(.caption)
 						}
-						.padding(.top, 10)
-					} label: {
-						Text("This iPhone")
-							.textCase(.uppercase)
-							.foregroundStyle(.secondary)
-							.font(.caption)
+						.clipShape(RoundedRectangle(cornerRadius: 30))
+						.containerShape(.rect(cornerRadius: 30))
+						.padding(.horizontal)
+						.safeAreaPadding(.top)
 					}
-					.clipShape(RoundedRectangle(cornerRadius: 30))
-					.containerShape(.rect(cornerRadius: 30))
-					.padding(.horizontal)
-					.safeAreaPadding(.top)
-
+					.safeAreaBar(edge: .bottom, alignment: .center, spacing: 0) {
+						PairingStatusView(
+							isConnected: isConnected,
+							currentMac: currentMac,
+							pairingState: connectivityManager.pairingState,
+							onDisconnect: { connectivityManager.disconnect() },
+							onForget: { showForgetAlert = true }
+						)
+						.padding([.bottom, .horizontal])
+						.animation(.easeInOut, value: connectivityManager.pairingState)
+						.animation(.easeInOut, value: isConnected)
+						.ignoresSafeArea()
+					}
+					.ignoresSafeArea()
 				}
-			}
-			.safeAreaBar(edge: .bottom, alignment: .center, spacing: 0) {
-				PairingStatusView(
-					isConnected: isConnected,
-					currentMac: currentMac,
-					pairingState: connectivityManager.pairingState,
-					onDisconnect: { connectivityManager.disconnect() },
-					onForget: { showForgetAlert = true }
-				)
-				.padding([.bottom, .horizontal])
-				.animation(.easeInOut, value: connectivityManager.pairingState)
-				.animation(.easeInOut, value: isConnected)
 			}
 			.ignoresSafeArea()
-			
 		}
-	}
-
-	private var bindingForSensitivity: Binding<Double> {
-		Binding(
-			get: { sensitivity },
-			set: { newValue in
-				sensitivity = newValue
-				connectivityManager.updateSettings(
-					sensitivity: newValue,
-					inverted: invertDirection,
-					smoothingMode: smoothingMode
-				)
-			}
-		)
 	}
 
 	private var bindingForInvertDirection: Binding<Bool> {
@@ -455,19 +448,6 @@ struct ContentView: View {
 				connectivityManager.updatePerformanceSettings(
 					inputResolution: newValue,
 					maxSendRateHz: maxSendRateHz
-				)
-			}
-		)
-	}
-
-	private var bindingForMaxSendRateHz: Binding<Double> {
-		Binding(
-			get: { maxSendRateHz },
-			set: { newValue in
-				maxSendRateHz = newValue
-				connectivityManager.updatePerformanceSettings(
-					inputResolution: inputResolution,
-					maxSendRateHz: newValue
 				)
 			}
 		)
