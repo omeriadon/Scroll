@@ -254,39 +254,41 @@ struct ContentView: View {
 		let isConnected = connectivityManager.isConnectedToMac
 
 		return NavigationStack {
-			List {
+			Form {
 				Section("This Device") {
 					Button {
 						editingDeviceName = connectivityManager.deviceName
 						showDeviceNameAlert = true
 					} label: {
 						HStack {
-							Text("Name")
+							Label("Name", systemImage: "iphone")
 							Spacer()
 							Text(connectivityManager.deviceName)
-								.foregroundStyle(.secondary)
 							Image(systemName: "chevron.right")
-								.foregroundStyle(.tertiary)
 								.font(.caption)
 						}
 					}
+					.buttonStyle(.plain)
 				}
 
-				// Connected Mac section (always on top when connected)
 				if isConnected, let current = currentMac {
 					Section {
-						VStack(alignment: .leading, spacing: 12) {
-							HStack {
-								VStack(alignment: .leading, spacing: 2) {
+						VStack(alignment: .leading) {
+							HStack(alignment: .top) {
+								Image(systemName: "macbook")
+									.tint(.primary)
+									.imageScale(.large)
+
+								VStack(alignment: .leading) {
 									Text(current.displayName)
-										.font(.headline)
 									Text("Connected")
 										.font(.caption)
 										.foregroundStyle(.green)
 								}
 							}
+							.font(.headline)
 
-							HStack(spacing: 12) {
+							HStack {
 								Button {
 									connectivityManager.disconnect()
 								} label: {
@@ -306,34 +308,25 @@ struct ContentView: View {
 								.tint(.red)
 							}
 						}
-						.padding(.vertical, 4)
 					}
+					.transition(.opacity)
 				}
 
-				// Pairing state section
 				if !isConnected {
-					if connectivityManager.pairingState == .pending {
-						Section {
-							HStack {
-								ProgressView()
-									.padding(.trailing, 8)
-								Text("Waiting for approval…")
-									.foregroundStyle(.orange)
-							}
-						}
-					} else if connectivityManager.pairingState == .rejected {
-						Section {
-							HStack {
-								Image(systemName: "xmark.circle.fill")
-									.foregroundStyle(.red)
-								Text("Connection rejected by Mac")
-							}
+					Section {
+						if connectivityManager.pairingState == .pending {
+							ProgressView("Waiting for approval…")
+								.foregroundStyle(.orange)
+
+						} else if connectivityManager.pairingState == .rejected {
+							Label("Connection rejected by Mac", systemImage: "xmark.circle.fill")
+								.foregroundStyle(.red)
 						}
 					}
+					.transition(.opacity)
 				}
 
-				// Available Macs section
-				Section {
+				Section(("Available Macs")) {
 					if hosts.isEmpty {
 						HStack {
 							ProgressView()
@@ -354,7 +347,7 @@ struct ContentView: View {
 								} label: {
 									HStack {
 										VStack(alignment: .leading, spacing: 2) {
-											Text(mac.deviceInfo?.name ?? mac.displayName)
+											Label(mac.deviceInfo?.name ?? mac.displayName, systemImage: "macbook")
 												.font(.body)
 											if isPaired {
 												Text("Paired")
@@ -365,19 +358,16 @@ struct ContentView: View {
 										Spacer()
 										if connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id {
 											ProgressView()
-										} else {
-											Image(systemName: "arrow.right.circle")
-												.foregroundStyle(.blue)
+												.transition(.blurReplace)
 										}
 									}
 								}
 							}
 						}
 					}
-				} header: {
-					Text("Available Macs")
 				}
 			}
+			.animation(.easeInOut, value: isConnected)
 			.alert("Rename Device", isPresented: $showDeviceNameAlert) {
 				TextField("Name", text: $editingDeviceName)
 				Button("Cancel", role: .cancel) {}
