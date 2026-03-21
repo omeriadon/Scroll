@@ -128,14 +128,6 @@ struct ContentView: View {
 			} message: {
 				Text("The Mac has removed this device from its paired list.")
 			}
-			.alert("Forget this Mac?", isPresented: $showForgetAlert) {
-				Button("Cancel", role: .cancel) {}
-				Button("Forget", role: .destructive) {
-					connectivityManager.forgetLastMac()
-				}
-			} message: {
-				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
-			}
 		}
 	}
 
@@ -376,6 +368,14 @@ struct ContentView: View {
 				}
 			}
 			.animation(.easeInOut, value: isConnected)
+			.alert("Forget this Mac?", isPresented: $showForgetAlert) {
+				Button("Cancel", role: .cancel) {}
+				Button("Forget", role: .destructive) {
+					connectivityManager.forgetLastMac()
+				}
+			} message: {
+				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
+			}
 			.alert("Rename Device", isPresented: $showDeviceNameAlert) {
 				TextField("Name", text: $editingDeviceName)
 				Button("Cancel", role: .cancel) {}
