@@ -253,7 +253,7 @@ struct ContentView: View {
 					}
 					.onChange(of: maxSendRateHz) { oldValue, newValue in
 						maxSendRateTask?.cancel()
-						sensitivityTask = Task {
+						maxSendRateTask = Task {
 							try? await Task.sleep(for: .milliseconds(50))
 							connectivityManager.updatePerformanceSettings(
 								inputResolution: inputResolution,

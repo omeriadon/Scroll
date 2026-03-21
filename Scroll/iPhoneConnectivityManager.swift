@@ -9,18 +9,16 @@ final class PhoneConnectivityManager {
 	static let shared = PhoneConnectivityManager()
 
 	private(set) var lastCommand: ScrollCommand?
-	private(set) var wasUnpaired = false // Flag to show unpaired alert
+	private(set) var wasUnpaired = false
 
 	private var nextSequence: Int64 = 1
 	private let networkClient = iPhoneScrollNetworkClient()
 
-	// Accumulator — merged when rate gate opens
 	private var pendingDelta: Double = 0
 	private var pendingVelocityTotal: Double = 0
 	private var pendingSampleCount: Int = 0
-	private var lastSendTime: Double = 0 // CACurrentMediaTime
+	private var lastSendTime: Double = 0
 
-	/// This device's name
 	var deviceName: String {
 		get { DeviceIdentity.getDeviceName() }
 		set { DeviceIdentity.setDeviceName(newValue) }
@@ -100,7 +98,6 @@ final class PhoneConnectivityManager {
 		Defaults[.maxSendRateHz] = max(30.0, min(120.0, maxSendRateHz))
 	}
 
-	/// Called from gesture .onChanged
 	func sendScrollDelta(delta: Double, velocity: Double) {
 		pendingDelta += delta
 		pendingVelocityTotal += velocity
@@ -113,7 +110,6 @@ final class PhoneConnectivityManager {
 		flush()
 	}
 
-	/// Called from gesture .onEnded — guarantees last sample is never silently dropped
 	func flushIfPending() {
 		guard pendingSampleCount > 0 else { return }
 		flush()
