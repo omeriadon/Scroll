@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct PairingStatusView: View {
 	let isConnected: Bool
@@ -13,6 +14,8 @@ struct PairingStatusView: View {
 	let pairingState: DiscoveredMac.PairingState
 	let onDisconnect: () -> Void
 	let onForget: () -> Void
+	
+	@State private var keyboardVisible = false
 
 	var body: some View {
 		ZStack {
@@ -34,7 +37,6 @@ struct PairingStatusView: View {
 							Spacer()
 						}
 						.font(.headline)
-						.padding(.bottom, 10)
 
 						HStack {
 							Button { onDisconnect() } label: { Text("Disconnect") }
@@ -65,7 +67,7 @@ struct PairingStatusView: View {
 								.transition(.blurReplace)
 						}
 
-						Text(pairingState == .pending ? "Waiting for approval..." : "Connection rejected by Mac")
+						Text(pairingState == .pending ? "Waiting for approval..." : "Connection rejected from Mac")
 							.contentTransition(.numericText())
 
 						Spacer()
@@ -77,7 +79,18 @@ struct PairingStatusView: View {
 				.transition(.blurReplace)
 			}
 		}
+		.onReceive(Publishers.keyboardShowing) { keyboardVisible = $0 }
+		.padding(.bottom, keyboardVisible ? 16 : 0)
+		.animation(.snappy, value: keyboardVisible)
 		.animation(.easeInOut, value: isConnected)
 		.animation(.easeInOut, value: pairingState)
+	}
+}
+
+extension Publishers {
+	static var keyboardShowing: AnyPublisher<Bool, Never> {
+		let show = NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification).map { _ in true }
+		let hide = NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification).map { _ in false }
+		return MergeMany(show, hide).eraseToAnyPublisher()
 	}
 }

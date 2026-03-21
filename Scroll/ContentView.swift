@@ -59,7 +59,7 @@ struct ContentView: View {
 				}
 			}
 			.ignoresSafeArea()
-			.safeAreaInset(edge: .top, alignment: .center, spacing: 0) {
+			.safeAreaBar(edge: .top, alignment: .center, spacing: 0) {
 				HStack(alignment: .center) {
 					Button {
 						isConnectionPresented = true
@@ -115,7 +115,7 @@ struct ContentView: View {
 			}
 			.popover(isPresented: $isSettingsPresented) {
 				settingsSheet
-					.presentationDetents([.fraction(0.8)])
+					.presentationDetents([.fraction(0.9)])
 					.presentationDragIndicator(.hidden)
 					.navigationTransition(
 						.zoom(sourceID: "settings", in: namespace)
@@ -123,7 +123,7 @@ struct ContentView: View {
 			}
 			.popover(isPresented: $isConnectionPresented) {
 				connectView
-					.presentationDetents([.fraction(0.8)])
+					.presentationDetents([.fraction(0.9)])
 					.presentationDragIndicator(.hidden)
 					.navigationTransition(
 						.zoom(sourceID: "connect", in: namespace)
@@ -175,7 +175,7 @@ struct ContentView: View {
 		NavigationStack {
 			Form {
 				Section("Scroll") {
-					Slider(value: bindingForSensitivity, in: 0.2...3.0) {
+					Slider(value: bindingForSensitivity, in: 0.2 ... 3.0) {
 						Text("SPEED")
 							.font(.system(.caption, design: .monospaced).weight(.semibold))
 					} minimumValueLabel: {
@@ -225,7 +225,7 @@ struct ContentView: View {
 					}
 					.pickerStyle(.segmented)
 
-					Slider(value: bindingForMaxSendRateHz, in: 30...120, step: 10) {
+					Slider(value: bindingForMaxSendRateHz, in: 30 ... 120, step: 10) {
 						Text("Send Rate")
 							.font(.system(.caption, design: .monospaced).weight(.semibold))
 					} minimumValueLabel: {
@@ -267,59 +267,102 @@ struct ContentView: View {
 		let pairedMac = connectivityManager.lastConnectedMac
 		let currentMac = connectivityManager.currentMac
 		let isConnected = connectivityManager.isConnectedToMac
-
-		return NavigationStack {
-			Form {
-				Section("Available Macs") {
-					ForEach(hosts) { mac in
-						let isThisConnected = currentMac?.id == mac.id && isConnected
-						let isPaired = mac.deviceInfo?.id == pairedMac?.id
-
-						if !isThisConnected {
-							Button {
-								withAnimation(.easeInOut) {
-									connectivityManager.connectToHost(mac.browseResult)
-								}
-							} label: {
-								HStack {
-									VStack(alignment: .leading, spacing: 2) {
-										HStack(alignment: .center) {
-											Image(systemName: "macbook")
-												.imageScale(.large)
-											VStack(alignment: .leading) {
-												Text(mac.deviceInfo?.name ?? mac.displayName)
-												if isPaired {
-													Text("Paired")
-														.font(.caption)
+		
+		return GeometryReader { proxy in
+			ZStack {
+				NavigationStack {
+					List {
+						Section {
+							ForEach(hosts) { mac in
+								let isThisConnected = currentMac?.id == mac.id && isConnected
+								let isPaired = mac.deviceInfo?.id == pairedMac?.id
+								
+								if !isThisConnected {
+									Button {
+										withAnimation(.easeInOut) {
+											connectivityManager.connectToHost(mac.browseResult)
+										}
+									} label: {
+										HStack {
+											VStack(alignment: .leading, spacing: 2) {
+												HStack(alignment: .center) {
+													Image(systemName: "macbook")
+														.imageScale(.large)
+													VStack(alignment: .leading) {
+														Text(mac.deviceInfo?.name ?? mac.displayName)
+														if isPaired {
+															Text("Paired")
+																.font(.caption)
+														}
+													}
 												}
 											}
+											Spacer()
+											if connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id {
+												Image(systemName: "progress.indicator")
+													.symbolEffect(.rotate.byLayer, options: .repeat(.continuous))
+													.transition(.blurReplace)
+											}
 										}
-									}
-									Spacer()
-									if connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id {
-										ProgressView()
-											.transition(.blurReplace)
+										.animation(.easeInOut, value: connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id)
 									}
 								}
-								.animation(.easeInOut, value: connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id)
 							}
+							ForEach(1 ... 50, id: \.self) { number in
+								Text("Item \(number)")
+							}
+						} header: {
+							Label {
+								Text("Available Macs")
+							} icon: {
+								ProgressView()
+							}
+							.padding(.top)
 						}
 					}
-					HStack {
-						ProgressView()
-							.padding(.trailing, 8)
-						Text("Searching…")
-							.foregroundStyle(.secondary)
+					.scrollBounceBehavior(.basedOnSize)
+					.animation(.easeInOut, value: isConnected)
+//					.toolbar {
+//						ToolbarItem(placement: .title) {
+//							Text("Connect to Mac")
+//								.fontDesign(.monospaced)
+//						}
+//						ToolbarItem(placement: .confirmationAction) {
+//							Button(role: .confirm) {
+//								isConnectionPresented = false
+//							}
+//						}
+//					}
+					.alert("Forget this Mac?", isPresented: $showForgetAlert) {
+						Button("Cancel", role: .cancel) {}
+						Button("Forget", role: .destructive) {
+							connectivityManager.forgetLastMac()
+						}
+					} message: {
+						Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
+					}
+					.alert("Rename", isPresented: $showDeviceNameAlert) {
+						TextField("Name", text: $editingDeviceName)
+						Button("Cancel", role: .cancel) {}
+						Button("Save", role: .confirm) {
+							let trimmed = editingDeviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+							if !trimmed.isEmpty {
+								connectivityManager.deviceName = trimmed
+								connectivityManager.flushIfPending()
+								connectivityManager.disconnect()
+								connectivityManager.forgetLastMac()
+							}
+						}
+						.keyboardShortcut(.defaultAction)
+					} message: {
+						Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
 					}
 				}
-			}
-			.safeAreaBar(edge: .top, alignment: .center, spacing: 10) {
-				VStack {
+				.safeAreaBar(edge: .top, alignment: .center, spacing: 0) {
 					GroupBox {
 						HStack {
 							Label("Name", systemImage: "iphone")
 							Spacer()
-
 							Button {
 								editingDeviceName = connectivityManager.deviceName
 								showDeviceNameAlert = true
@@ -339,56 +382,26 @@ struct ContentView: View {
 							.font(.caption)
 					}
 					.clipShape(RoundedRectangle(cornerRadius: 30))
-					.containerShape(
-						.rect(cornerRadius: 30)
-					)
+					.containerShape(.rect(cornerRadius: 30))
+					.padding(.horizontal)
+					.safeAreaPadding(.top)
 
-					PairingStatusView(
-						isConnected: isConnected,
-						currentMac: currentMac,
-						pairingState: connectivityManager.pairingState,
-						onDisconnect: { connectivityManager.disconnect() },
-						onForget: { showForgetAlert = true }
-					)
-				}
-				.padding(.horizontal)
-			}
-			.animation(.easeInOut, value: isConnected)
-			.alert("Forget this Mac?", isPresented: $showForgetAlert) {
-				Button("Cancel", role: .cancel) {}
-				Button("Forget", role: .destructive) {
-					connectivityManager.forgetLastMac()
-				}
-			} message: {
-				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
-			}
-			.alert("Rename Device", isPresented: $showDeviceNameAlert) {
-				TextField("Name", text: $editingDeviceName)
-				Button("Cancel", role: .cancel) {}
-				Button("Save", role: .confirm) {
-					let trimmed = editingDeviceName.trimmingCharacters(in: .whitespacesAndNewlines)
-					if !trimmed.isEmpty {
-						connectivityManager.deviceName = trimmed
-						connectivityManager.flushIfPending()
-						connectivityManager.disconnect()
-						connectivityManager.forgetLastMac()
-					}
-				}
-				.keyboardShortcut(.defaultAction)
-			} message: {
-				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
-			}
-			.toolbar {
-				ToolbarItem(placement: .title) {
-					Text("Connect to Mac")
-						.fontDesign(.monospaced)
-				}
-				ToolbarItem(placement: .confirmationAction) {
-					Button(role: .confirm) {
-						isConnectionPresented = false
-					}
 				}
 			}
+			.safeAreaBar(edge: .bottom, alignment: .center, spacing: 0) {
+				PairingStatusView(
+					isConnected: isConnected,
+					currentMac: currentMac,
+					pairingState: connectivityManager.pairingState,
+					onDisconnect: { connectivityManager.disconnect() },
+					onForget: { showForgetAlert = true }
+				)
+				.padding([.bottom, .horizontal])
+				.animation(.easeInOut, value: connectivityManager.pairingState)
+				.animation(.easeInOut, value: isConnected)
+			}
+			.ignoresSafeArea()
+			
 		}
 	}
 
@@ -479,30 +492,4 @@ struct InnerHeightPreferenceKey: PreferenceKey {
 #Preview {
 	ContentView()
 		.environment(PhoneConnectivityManager.shared)
-}
-
-extension AnyTransition {
-	static var blurFade: AnyTransition {
-		.asymmetric(
-			insertion: .modifier(
-				active: BlurFadeModifier(blur: 10, opacity: 0),
-				identity: BlurFadeModifier(blur: 0, opacity: 1)
-			),
-			removal: .modifier(
-				active: BlurFadeModifier(blur: 10, opacity: 0),
-				identity: BlurFadeModifier(blur: 0, opacity: 1)
-			)
-		)
-	}
-}
-
-struct BlurFadeModifier: ViewModifier {
-	let blur: CGFloat
-	let opacity: Double
-
-	func body(content: Content) -> some View {
-		content
-			.blur(radius: blur)
-			.opacity(opacity)
-	}
 }
