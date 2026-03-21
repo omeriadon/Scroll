@@ -64,13 +64,23 @@ struct ContentView: View {
 					Button {
 						isConnectionPresented = true
 					} label: {
-						Text("\(connectivityManager.macConnectionStatus.uppercased())")
-							.fontDesign(.monospaced)
-							.font(.caption)
-							.fixedSize()
-							.padding(11)
-							.glassEffect(.regular.tint(connectivityManager.isConnectedToMac ? .green : .red).interactive())
-							.foregroundStyle(connectivityManager.isConnectedToMac ? .black : .white)
+						Label {
+							Text("\(connectivityManager.macConnectionStatus.uppercased())")
+								.contentTransition(.numericText())
+						} icon: {
+							if connectivityManager.isConnectedToMac {
+								Image(systemName: "macbook")
+									.transition(.blurReplace)
+							}
+						}
+						.labelStyle(.titleAndIcon)
+						.fontDesign(.monospaced)
+						.font(.caption)
+						.fixedSize()
+						.padding(11)
+						.glassEffect(.regular.tint(connectivityManager.isConnectedToMac ? .green : .red).interactive())
+						.foregroundStyle(connectivityManager.isConnectedToMac ? .black : .white)
+						.animation(.easeInOut, value: connectivityManager.isConnectedToMac)
 					}
 					.buttonStyle(.plain)
 				}
@@ -155,7 +165,7 @@ struct ContentView: View {
 
 	private var settingsSheet: some View {
 		NavigationStack {
-			List {
+			Form {
 				Section("Scroll") {
 					Slider(value: bindingForSensitivity, in: 0.2...3.0) {
 						Text("SPEED")
@@ -229,9 +239,6 @@ struct ContentView: View {
 					}
 				}
 			}
-			.listStyle(.insetGrouped)
-			.font(.system(.body, design: .monospaced))
-			.toolbarTitleDisplayMode(.inline)
 			.toolbar {
 				ToolbarItem(placement: .title) {
 					Text("Settings")
@@ -254,7 +261,7 @@ struct ContentView: View {
 		let isConnected = connectivityManager.isConnectedToMac
 
 		return NavigationStack {
-			Form {
+			List {
 				Section("This Device") {
 					Button {
 						editingDeviceName = connectivityManager.deviceName
@@ -274,7 +281,7 @@ struct ContentView: View {
 				if isConnected, let current = currentMac {
 					Section {
 						VStack(alignment: .leading) {
-							HStack(alignment: .top) {
+							HStack(alignment: .center) {
 								Image(systemName: "macbook")
 									.tint(.primary)
 									.imageScale(.large)
@@ -287,6 +294,7 @@ struct ContentView: View {
 								}
 							}
 							.font(.headline)
+							.padding(.bottom, 10)
 
 							HStack {
 								Button {
@@ -326,7 +334,7 @@ struct ContentView: View {
 					.transition(.opacity)
 				}
 
-				Section(("Available Macs")) {
+				Section("Available Macs") {
 					if hosts.isEmpty {
 						HStack {
 							ProgressView()
