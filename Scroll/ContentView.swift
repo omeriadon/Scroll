@@ -298,82 +298,13 @@ struct ContentView: View {
 					.rect(cornerRadius: 30)
 				)
 
-				Group {
-					if isConnected, let current = currentMac {
-						GroupBox {
-							VStack(alignment: .leading) {
-								HStack(alignment: .center) {
-									Image(systemName: "macbook")
-										.tint(.primary)
-										.imageScale(.large)
-
-									VStack(alignment: .leading) {
-										Text(current.displayName)
-										Text("Connected")
-											.font(.caption)
-											.foregroundStyle(.green)
-									}
-
-									Spacer()
-								}
-								.font(.headline)
-								.padding(.bottom, 10)
-
-								HStack {
-									Button {
-										connectivityManager.disconnect()
-									} label: {
-										Text("Disconnect")
-									}
-									.buttonStyle(.glass)
-									.tint(.blue)
-
-									Spacer()
-
-									Button {
-										showForgetAlert = true
-									} label: {
-										Text("Forget")
-									}
-									.buttonStyle(.glassProminent)
-									.tint(.red)
-								}
-							}
-						}
-						.clipShape(RoundedRectangle(cornerRadius: 30))
-						.containerShape(
-							.rect(cornerRadius: 30)
-						)
-						.transition(.blurReplace)
-					}
-
-					if !isConnected && (connectivityManager.pairingState == .pending || connectivityManager.pairingState == .rejected) {
-						GroupBox {
-							HStack(alignment: .center, spacing: 10) {
-								if connectivityManager.pairingState == .pending {
-									Image(systemName: "progress.indicator")
-										.symbolEffect(.rotate.byLayer, options: .repeat(.continuous))
-										.transition(.blurReplace)
-
-								} else {
-									Image(systemName: "xmark.circle")
-										.transition(.blurReplace)
-								}
-								Text(connectivityManager.pairingState == .pending ? "Waiting for approval..." : "Connection rejected by Mac")
-									.contentTransition(.numericText())
-
-								Spacer()
-							}
-							.foregroundStyle(connectivityManager.pairingState == .pending ? .orange : .red)
-						}
-						.clipShape(RoundedRectangle(cornerRadius: 30))
-						.containerShape(
-							.rect(cornerRadius: 30)
-						)
-						.transition(.blurReplace)
-					}
-				}
-				.animation(.easeInOut, value: "\(isConnected)\(String(describing: currentMac))\(connectivityManager.pairingState)")
+				PairingStatusView(
+					isConnected: isConnected,
+					currentMac: currentMac,
+					pairingState: connectivityManager.pairingState,
+					onDisconnect: { connectivityManager.disconnect() },
+					onForget: { showForgetAlert = true }
+				)
 			}
 			.padding(.horizontal)
 
