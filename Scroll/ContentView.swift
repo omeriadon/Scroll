@@ -126,20 +126,6 @@ struct ContentView: View {
 			} message: {
 				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
 			}
-			.alert("Rename Device", isPresented: $showDeviceNameAlert) {
-				TextField("Name", text: $editingDeviceName)
-				Button("Cancel", role: .cancel) {}
-				Button("Save", role: .confirm) {
-					let trimmed = editingDeviceName.trimmingCharacters(in: .whitespacesAndNewlines)
-					if !trimmed.isEmpty {
-						connectivityManager.deviceName = trimmed
-						connectivityManager.forgetLastMac()
-						isConnectionPresented = true
-					}
-				}
-			} message: {
-				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
-			}
 		}
 	}
 
@@ -272,7 +258,6 @@ struct ContentView: View {
 				Section("This Device") {
 					Button {
 						editingDeviceName = connectivityManager.deviceName
-						isConnectionPresented = false
 						showDeviceNameAlert = true
 					} label: {
 						HStack {
@@ -308,8 +293,8 @@ struct ContentView: View {
 									Text("Disconnect")
 										.frame(maxWidth: .infinity)
 								}
-								.buttonStyle(.borderedProminent)
-								.tint(.red)
+								.buttonStyle(.glass)
+								.tint(.blue)
 
 								Button {
 									showForgetAlert = true
@@ -317,7 +302,7 @@ struct ContentView: View {
 									Text("Forget")
 										.frame(maxWidth: .infinity)
 								}
-								.buttonStyle(.bordered)
+								.buttonStyle(.glassProminent)
 								.tint(.red)
 							}
 						}
@@ -392,6 +377,22 @@ struct ContentView: View {
 				} header: {
 					Text("Available Macs")
 				}
+			}
+			.alert("Rename Device", isPresented: $showDeviceNameAlert) {
+				TextField("Name", text: $editingDeviceName)
+				Button("Cancel", role: .cancel) {}
+				Button("Save", role: .confirm) {
+					let trimmed = editingDeviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+					if !trimmed.isEmpty {
+						connectivityManager.deviceName = trimmed
+						connectivityManager.flushIfPending()
+						connectivityManager.disconnect()
+						connectivityManager.forgetLastMac()
+					}
+				}
+				.keyboardShortcut(.defaultAction)
+			} message: {
+				Text("This will disconnect and remove the pairing. You'll need to approve the connection again.")
 			}
 			.toolbar {
 				ToolbarItem(placement: .title) {
