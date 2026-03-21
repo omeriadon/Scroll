@@ -27,7 +27,11 @@ final class MacHostManager {
     /// This Mac's name
     var macName: String {
         get { DeviceIdentity.getDeviceName() }
-        set { DeviceIdentity.setDeviceName(newValue) }
+        set { 
+            DeviceIdentity.setDeviceName(newValue) 
+            // Restart listener to update advertised name
+            networkListener.restartListener()
+        }
     }
 
     private let accessibility = AccessibilityPermissionManager()

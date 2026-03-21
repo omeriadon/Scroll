@@ -14,6 +14,7 @@ public enum ScrollNetworkProtocol {
 private extension NWParameters {
     static func scrollUDP() -> NWParameters {
         let params = NWParameters.udp
+		params.requiredInterfaceType = .wifi
         params.allowLocalEndpointReuse = true
         params.includePeerToPeer = true
         return params
@@ -73,8 +74,10 @@ public final class MacScrollNetworkListener {
                 using: params,
                 on: NWEndpoint.Port(integerLiteral: ScrollNetworkProtocol.defaultPort)
             )
+            // Advertise with device name so iPhone can auto-connect by name
+            let serviceName = DeviceIdentity.getDeviceName()
             l.service = NWListener.Service(
-                name: ScrollNetworkProtocol.serviceName,
+                name: serviceName,
                 type: ScrollNetworkProtocol.serviceType
             )
 
@@ -288,6 +291,12 @@ public final class MacScrollNetworkListener {
         onStateChanged?()
     }
     
+    /// Restart listener (e.g., after name change to update advertised name)
+    public func restartListener() {
+        stopListening()
+        startListening()
+    }
+    
     /// Remove a device from the approved list and notify it
     public func unpairDevice(_ deviceID: UUID) {
         var devices = Defaults[.approvedDevices]
@@ -350,7 +359,7 @@ public struct DiscoveredMac: Sendable, Hashable, Identifiable {
         deviceInfo?.name ?? id
     }
     
-    public enum PairingState: Sendable {
+    public enum PairingState: Sendable, Equatable {
         case unknown
         case pending
         case approved
@@ -438,12 +447,10 @@ public final class iPhoneScrollNetworkClient {
         
         hasAttemptedAutoConnect = true
         
-        // Find the last connected Mac in discovered hosts
-        // Try matching by UUID first, then by name
+        // Find the last connected Mac - match by UUID first, then by service name
         if let mac = discoveredHosts.first(where: { $0.deviceInfo?.id == lastMac.id }) {
             connectToHost(mac.browseResult)
         } else if let mac = discoveredHosts.first(where: { host in
-            // Match by service name containing Mac name
             if case .service(let name, _, _, _) = host.browseResult.endpoint {
                 return name == lastMac.name || lastMac.name.contains(name) || name.contains(lastMac.name)
             }

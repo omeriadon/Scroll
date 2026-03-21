@@ -11,7 +11,7 @@ struct ScrollMacApp: App {
 			MenuBarView()
 				.environment(hostManager)
 		}
-		.menuBarExtraStyle(.window)
+		.menuBarExtraStyle(.menu)
 		.onChange(of: hostManager.showPairingAlert) { _, showAlert in
 			if showAlert {
 				Task { @MainActor in

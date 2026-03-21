@@ -59,46 +59,64 @@ struct ContentView: View {
 				}
 			}
 			.ignoresSafeArea()
-			.toolbar {
-				ToolbarItem(placement: .topBarLeading) {
+			.safeAreaInset(edge: .top, alignment: .center, spacing: 0) {
+				HStack(alignment: .center) {
 					Button {
 						isConnectionPresented = true
 					} label: {
-						Label {
-							Text("\(connectivityManager.macConnectionStatus.uppercased())")
-								.contentTransition(.numericText())
-						} icon: {
+						HStack {
 							if connectivityManager.isConnectedToMac {
 								Image(systemName: "macbook")
 									.transition(.blurReplace)
+							} else if connectivityManager.pairingState == .pending {
+								Image(systemName: "progress.indicator")
+									.symbolEffect(.rotate.byLayer, options: .repeat(.continuous))
+									.transition(.blurReplace)
+							} else if connectivityManager.pairingState == .rejected {
+								Image(systemName: "nosign")
+									.transition(.blurReplace)
+							} else {
+								Image(systemName: "macbook.slash")
+									.transition(.blurReplace)
 							}
+
+							Text("\(connectivityManager.macConnectionStatus.uppercased())")
+								.contentTransition(.numericText())
 						}
 						.labelStyle(.titleAndIcon)
 						.fontDesign(.monospaced)
-						.font(.caption)
+						.font(.subheadline)
 						.fixedSize()
-						.padding(11)
-						.glassEffect(.regular.tint(connectivityManager.isConnectedToMac ? .green : .red).interactive())
+						.padding(5)
 						.foregroundStyle(connectivityManager.isConnectedToMac ? .black : .white)
-						.animation(.easeInOut, value: connectivityManager.isConnectedToMac)
 					}
-					.buttonStyle(.plain)
-				}
-				.sharedBackgroundVisibility(.hidden)
-				.matchedTransitionSource(id: "connect", in: namespace)
+					.buttonStyle(.glassProminent)
+					.buttonBorderShape(.capsule)
+					.tint(connectivityManager.isConnectedToMac ? .green : connectivityManager.pairingState == .pending ? .orange : .red)
+					.animation(.easeInOut, value: "\(connectivityManager.isConnectedToMac)\(connectivityManager.pairingState)")
+					.matchedTransitionSource(id: "connect", in: namespace)
 
-				ToolbarItem(placement: .topBarTrailing) {
+					Spacer()
+
 					Button {
 						isSettingsPresented = true
 					} label: {
 						Label("Settings", systemImage: "slider.horizontal.3")
+							.font(.headline)
+							.labelStyle(.iconOnly)
+							.padding(5)
 					}
+					.buttonStyle(.glass)
+					.buttonBorderShape(.circle)
+					.matchedTransitionSource(id: "settings", in: namespace)
 				}
-				.matchedTransitionSource(id: "settings", in: namespace)
+				.padding(.top, 7)
+				.padding(.horizontal)
 			}
 			.popover(isPresented: $isSettingsPresented) {
 				settingsSheet
 					.presentationDetents([.fraction(0.8)])
+					.presentationDragIndicator(.hidden)
 					.navigationTransition(
 						.zoom(sourceID: "settings", in: namespace)
 					)
@@ -106,6 +124,7 @@ struct ContentView: View {
 			.popover(isPresented: $isConnectionPresented) {
 				connectView
 					.presentationDetents([.fraction(0.8)])
+					.presentationDragIndicator(.hidden)
 					.navigationTransition(
 						.zoom(sourceID: "connect", in: namespace)
 					)
@@ -250,79 +269,115 @@ struct ContentView: View {
 		let isConnected = connectivityManager.isConnectedToMac
 
 		return NavigationStack {
-			List {
-				Section("This Device") {
-					Button {
-						editingDeviceName = connectivityManager.deviceName
-						showDeviceNameAlert = true
-					} label: {
-						HStack {
-							Label("Name", systemImage: "iphone")
-							Spacer()
-							Text(connectivityManager.deviceName)
-							Image(systemName: "chevron.right")
-								.font(.caption)
-						}
-					}
-					.buttonStyle(.plain)
-				}
+			Group {
+				GroupBox {
+					HStack {
+						Label("Name", systemImage: "iphone")
+						Spacer()
 
-				if isConnected, let current = currentMac {
-					Section {
-						VStack(alignment: .leading) {
-							HStack(alignment: .center) {
-								Image(systemName: "macbook")
-									.tint(.primary)
-									.imageScale(.large)
-
-								VStack(alignment: .leading) {
-									Text(current.displayName)
-									Text("Connected")
-										.font(.caption)
-										.foregroundStyle(.green)
-								}
-							}
-							.font(.headline)
-							.padding(.bottom, 10)
-
+						Button {
+							editingDeviceName = connectivityManager.deviceName
+							showDeviceNameAlert = true
+						} label: {
 							HStack {
-								Button {
-									connectivityManager.disconnect()
-								} label: {
-									Text("Disconnect")
-										.frame(maxWidth: .infinity)
-								}
-								.buttonStyle(.glass)
-								.tint(.blue)
-
-								Button {
-									showForgetAlert = true
-								} label: {
-									Text("Forget")
-										.frame(maxWidth: .infinity)
-								}
-								.buttonStyle(.glassProminent)
-								.tint(.red)
+								Text(connectivityManager.deviceName)
+								Image(systemName: "chevron.right")
 							}
 						}
+						.buttonStyle(.glass)
 					}
-					.transition(.opacity)
+					.padding(.top, 10)
+				} label: {
+					Text("This iPhone")
+						.textCase(.uppercase)
+						.foregroundStyle(.secondary)
+						.font(.caption)
 				}
+				.clipShape(RoundedRectangle(cornerRadius: 30))
+				.containerShape(
+					.rect(cornerRadius: 30)
+				)
 
-				if !isConnected {
-					Section {
-						if connectivityManager.pairingState == .pending {
-							ProgressView("Waiting for approval…")
-								.foregroundStyle(.orange)
+				Group {
+					if isConnected, let current = currentMac {
+						GroupBox {
+							VStack(alignment: .leading) {
+								HStack(alignment: .center) {
+									Image(systemName: "macbook")
+										.tint(.primary)
+										.imageScale(.large)
 
-						} else if connectivityManager.pairingState == .rejected {
-							Label("Connection rejected by Mac", systemImage: "xmark.circle.fill")
-								.foregroundStyle(.red)
+									VStack(alignment: .leading) {
+										Text(current.displayName)
+										Text("Connected")
+											.font(.caption)
+											.foregroundStyle(.green)
+									}
+
+									Spacer()
+								}
+								.font(.headline)
+								.padding(.bottom, 10)
+
+								HStack {
+									Button {
+										connectivityManager.disconnect()
+									} label: {
+										Text("Disconnect")
+									}
+									.buttonStyle(.glass)
+									.tint(.blue)
+
+									Spacer()
+
+									Button {
+										showForgetAlert = true
+									} label: {
+										Text("Forget")
+									}
+									.buttonStyle(.glassProminent)
+									.tint(.red)
+								}
+							}
 						}
+						.clipShape(RoundedRectangle(cornerRadius: 30))
+						.containerShape(
+							.rect(cornerRadius: 30)
+						)
+						.transition(.blurReplace)
 					}
-					.transition(.opacity)
-				}
 
+					if !isConnected && (connectivityManager.pairingState == .pending || connectivityManager.pairingState == .rejected) {
+						GroupBox {
+							HStack(alignment: .center, spacing: 10) {
+								if connectivityManager.pairingState == .pending {
+									Image(systemName: "progress.indicator")
+										.symbolEffect(.rotate.byLayer, options: .repeat(.continuous))
+										.transition(.blurReplace)
+
+								} else {
+									Image(systemName: "xmark.circle")
+										.transition(.blurReplace)
+								}
+								Text(connectivityManager.pairingState == .pending ? "Waiting for approval..." : "Connection rejected by Mac")
+									.contentTransition(.numericText())
+
+								Spacer()
+							}
+							.foregroundStyle(connectivityManager.pairingState == .pending ? .orange : .red)
+						}
+						.clipShape(RoundedRectangle(cornerRadius: 30))
+						.containerShape(
+							.rect(cornerRadius: 30)
+						)
+						.transition(.blurReplace)
+					}
+				}
+				.animation(.easeInOut, value: "\(isConnected)\(String(describing: currentMac))\(connectivityManager.pairingState)")
+			}
+			.padding(.horizontal)
+
+			Form {
 				Section("Available Macs") {
 					if hosts.isEmpty {
 						HStack {
@@ -344,12 +399,17 @@ struct ContentView: View {
 								} label: {
 									HStack {
 										VStack(alignment: .leading, spacing: 2) {
-											Label(mac.deviceInfo?.name ?? mac.displayName, systemImage: "macbook")
-												.font(.body)
-											if isPaired {
-												Text("Paired")
-													.font(.caption)
-													.foregroundStyle(.secondary)
+											HStack(alignment: .center) {
+												Image(systemName: "macbook")
+													.imageScale(.large)
+												VStack(alignment: .leading) {
+													Text(mac.deviceInfo?.name ?? mac.displayName)
+													if isPaired {
+														Text("Paired")
+															.font(.caption)
+															.foregroundStyle(.secondary)
+													}
+												}
 											}
 										}
 										Spacer()
@@ -490,4 +550,30 @@ struct InnerHeightPreferenceKey: PreferenceKey {
 #Preview {
 	ContentView()
 		.environment(PhoneConnectivityManager.shared)
+}
+
+extension AnyTransition {
+	static var blurFade: AnyTransition {
+		.asymmetric(
+			insertion: .modifier(
+				active: BlurFadeModifier(blur: 10, opacity: 0),
+				identity: BlurFadeModifier(blur: 0, opacity: 1)
+			),
+			removal: .modifier(
+				active: BlurFadeModifier(blur: 10, opacity: 0),
+				identity: BlurFadeModifier(blur: 0, opacity: 1)
+			)
+		)
+	}
+}
+
+struct BlurFadeModifier: ViewModifier {
+	let blur: CGFloat
+	let opacity: Double
+
+	func body(content: Content) -> some View {
+		content
+			.blur(radius: blur)
+			.opacity(opacity)
+	}
 }
