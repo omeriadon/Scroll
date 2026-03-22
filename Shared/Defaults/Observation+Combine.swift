@@ -1,11 +1,11 @@
-import Foundation
 import Combine
+import Foundation
 
-extension Defaults {
+public extension Defaults {
 	/**
-	Custom `Subscription` for `UserDefaults` key observation.
-	*/
-	final class DefaultsSubscription<SubscriberType: Subscriber>: Subscription where SubscriberType.Input == BaseChange {
+	 Custom `Subscription` for `UserDefaults` key observation.
+	 */
+	internal final class DefaultsSubscription<SubscriberType: Subscriber>: Subscription where SubscriberType.Input == BaseChange {
 		private var subscriber: SubscriberType?
 		private var observation: DefaultsObservationWithLifeTime?
 		private let options: ObservationOptions
@@ -13,14 +13,14 @@ extension Defaults {
 		init(subscriber: SubscriberType, suite: UserDefaults, key: String, options: ObservationOptions) {
 			self.subscriber = subscriber
 			self.options = options
-			self.observation = DefaultsObservationWithLifeTime(
+			observation = DefaultsObservationWithLifeTime(
 				object: suite,
 				key: key,
 				observationCallback
 			)
 		}
 
-		func request(_ demand: Subscribers.Demand) {
+		func request(_: Subscribers.Demand) {
 			// Nothing as we send events only when they occur.
 		}
 
@@ -39,9 +39,9 @@ extension Defaults {
 	}
 
 	/**
-	Custom Publisher, which is using DefaultsSubscription.
-	*/
-	struct DefaultsPublisher: Publisher {
+	 Custom Publisher, which is using DefaultsSubscription.
+	 */
+	internal struct DefaultsPublisher: Publisher {
 		typealias Output = BaseChange
 		typealias Failure = Never
 
@@ -69,24 +69,24 @@ extension Defaults {
 	}
 
 	/**
-	Returns a type-erased `Publisher` that publishes changes related to the given key.
+	 Returns a type-erased `Publisher` that publishes changes related to the given key.
 
-	```swift
-	extension Defaults.Keys {
-		static let isUnicornMode = Key<Bool>("isUnicornMode", default: false)
-	}
+	 ```swift
+	 extension Defaults.Keys {
+	 	static let isUnicornMode = Key<Bool>("isUnicornMode", default: false)
+	 }
 
-	let publisher = Defaults.publisher(.isUnicornMode).map(\.newValue)
+	 let publisher = Defaults.publisher(.isUnicornMode).map(\.newValue)
 
-	let cancellable = publisher.sink { value in
-		print(value)
-		//=> false
-	}
-	```
+	 let cancellable = publisher.sink { value in
+	 	print(value)
+	 	//=> false
+	 }
+	 ```
 
-	- Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
-	*/
-	public static func publisher<Value: Serializable>(
+	 - Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
+	 */
+	static func publisher<Value: Serializable>(
 		_ key: Key<Value>,
 		options: ObservationOptions = [.initial]
 	) -> AnyPublisher<KeyChange<Value>, Never> {
@@ -97,11 +97,11 @@ extension Defaults {
 	}
 
 	/**
-	Publisher for multiple `Key<T>` observation, but without specific information about changes.
+	 Publisher for multiple `Key<T>` observation, but without specific information about changes.
 
-	- Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
-	*/
-	public static func publisher(
+	 - Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
+	 */
+	static func publisher(
 		keys: [_AnyKey],
 		options: ObservationOptions = [.initial]
 	) -> AnyPublisher<Void, Never> {
@@ -120,11 +120,11 @@ extension Defaults {
 	}
 
 	/**
-	Publisher for multiple `Key<T>` observation, but without specific information about changes.
+	 Publisher for multiple `Key<T>` observation, but without specific information about changes.
 
-	- Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
-	*/
-	public static func publisher(
+	 - Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
+	 */
+	static func publisher(
 		keys: _AnyKey...,
 		options: ObservationOptions = [.initial]
 	) -> AnyPublisher<Void, Never> {

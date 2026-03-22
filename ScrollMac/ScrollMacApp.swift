@@ -1,13 +1,67 @@
 import AppKit
+import Luminare
 import SwiftUI
+
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+	weak static var shared: AppDelegate?
+	private var controller: NSWindowController?
+	let hostManager = MacHostManager.shared
+
+	override init() {
+		super.init()
+		AppDelegate.shared = self
+		print("AppDelegate init")
+	}
+
+	func showSettings() {
+		print("showSettings called")
+		if controller == nil {
+			print("creating window")
+			let window = LuminareWindow {
+				SettingsView()
+					.environment(self.hostManager)
+					.frame(width: 450, height: 600)
+			}
+			print("window created: \(window)")
+			window.backgroundColor = .white.withAlphaComponent(0.001)
+			window.ignoresMouseEvents = false
+			window.delegate = self
+			controller = NSWindowController(window: window)
+			print("controller created: \(String(describing: controller))")
+		}
+
+		print("activation policy before: \(NSApp.activationPolicy().rawValue)")
+		NSApp.setActivationPolicy(.regular)
+		print("activation policy after: \(NSApp.activationPolicy().rawValue)")
+
+		controller?.showWindow(self)
+		print("showWindow called")
+
+		controller?.window?.makeKeyAndOrderFront(nil)
+		controller?.window?.orderFrontRegardless()
+		print("window visible: \(String(describing: controller?.window?.isVisible))")
+		print("window frame: \(String(describing: controller?.window?.frame))")
+
+		NSApp.activate(ignoringOtherApps: true)
+		print("NSApp activated")
+	}
+
+	func windowWillClose(_: Notification) {
+		print("window closing")
+		NSApp.setActivationPolicy(.accessory)
+		controller = nil
+	}
+}
 
 @main
 struct ScrollMacApp: App {
-	@State private var hostManager = MacHostManager()
+	@State private var hostManager = MacHostManager.shared
 	@Environment(\.openWindow) private var openWindow
 	@Environment(\.dismissWindow) var dismissWindow
 
 	@State private var isHovered = false
+
+	@NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
 	var body: some Scene {
 		MenuBarExtra("Scroll", systemImage: "digitalcrown.horizontal.press") {
@@ -21,61 +75,6 @@ struct ScrollMacApp: App {
 					openWindow(id: "pairing-request")
 					NSApp.activate(ignoringOtherApps: true)
 				}
-			}
-		}
-
-		Window("Settings", id: "scroll-settings") {
-			NavigationStack {
-				SettingsView()
-					.safeAreaBar(edge: .top, alignment: .trailing, spacing: 0) {
-						Text("rtbfd")
-							.frame(height: 0)
-							.opacity(0)
-							.accessibilityHidden(true)
-					}
-					.safeAreaInset(edge: .top, alignment: .center, spacing: 0) {
-						ZStack(alignment: .leading) {
-							WindowDragHandle()
-								.frame(maxWidth: .infinity)
-								.frame(height: 50)
-								.ignoresSafeArea()
-
-							Button {
-								dismissWindow(id: "scroll-settings")
-							} label: {
-								Image(systemName: "xmark")
-									.imageScale(.medium)
-									.padding(1)
-									.opacity(isHovered ? 1 : 0)
-									.foregroundStyle(Color(red: 129/255, green: 49/255, blue: 47/255))
-									.fontWeight(.black)
-							}
-							.tint(.red)
-							.onHover { isHovered = $0 }
-							.labelStyle(.iconOnly)
-							.buttonStyle(.glassProminent)
-							.buttonBorderShape(.circle)
-							.padding()
-							.controlSize(.mini)
-						}
-					}
-			}
-			.environment(hostManager)
-			.frame(width: 500, height: 450)
-			.background {
-				SettingsWindowConfigurator()
-			}
-			.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 25))
-		}
-		.windowStyle(.plain)
-		.windowResizability(.contentSize)
-		.commands {
-			CommandGroup(replacing: .appSettings) {
-				Button("Settings...") {
-					openWindow(id: "scroll-settings")
-					NSApp.activate(ignoringOtherApps: true)
-				}
-				.keyboardShortcut(",", modifiers: .command)
 			}
 		}
 
@@ -134,6 +133,7 @@ struct PairingRequestView: View {
 					hostManager.approvePairing()
 					dismissWindow(id: "pairing-request")
 				}
+				.foregroundStyle(.white)
 				.keyboardShortcut(.return, modifiers: [])
 				.buttonStyle(.glassProminent)
 				.controlSize(.extraLarge)
@@ -148,7 +148,7 @@ struct PairingRequestView: View {
 }
 
 struct PairingWindowConfigurator: NSViewRepresentable {
-	func makeNSView(context: Context) -> NSView {
+	func makeNSView(context _: Context) -> NSView {
 		let view = NSView()
 		DispatchQueue.main.async {
 			guard let w = view.window else { return }
@@ -167,11 +167,11 @@ struct PairingWindowConfigurator: NSViewRepresentable {
 		return view
 	}
 
-	func updateNSView(_ nsView: NSView, context: Context) {}
+	func updateNSView(_: NSView, context _: Context) {}
 }
 
 struct SettingsWindowConfigurator: NSViewRepresentable {
-	func makeNSView(context: Context) -> NSView {
+	func makeNSView(context _: Context) -> NSView {
 		let view = NSView()
 		DispatchQueue.main.async {
 			guard let w = view.window else { return }
@@ -190,7 +190,7 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
 		return view
 	}
 
-	func updateNSView(_ nsView: NSView, context: Context) {}
+	func updateNSView(_: NSView, context _: Context) {}
 }
 
 class KeyableWindow: NSWindow {
@@ -204,11 +204,11 @@ class KeyableWindow: NSWindow {
 }
 
 struct WindowDragHandle: NSViewRepresentable {
-	func makeNSView(context: Context) -> DragView {
+	func makeNSView(context _: Context) -> DragView {
 		DragView()
 	}
 
-	func updateNSView(_ nsView: DragView, context: Context) {}
+	func updateNSView(_: DragView, context _: Context) {}
 }
 
 class DragView: NSView {

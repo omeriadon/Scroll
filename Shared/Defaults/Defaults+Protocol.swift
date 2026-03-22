@@ -1,41 +1,41 @@
 import Foundation
 
-extension Defaults {
+public extension Defaults {
 	/**
-	Types that conform to this protocol can be used with `Defaults`.
+	 Types that conform to this protocol can be used with `Defaults`.
 
-	The type should have a static variable `bridge` which should reference an instance of a type that conforms to `Defaults.Bridge`.
+	 The type should have a static variable `bridge` which should reference an instance of a type that conforms to `Defaults.Bridge`.
 
-	```swift
-	struct User {
-		username: String
-		password: String
-	}
+	 ```swift
+	 struct User {
+	 	username: String
+	 	password: String
+	 }
 
-	extension User: Defaults.Serializable {
-		static let bridge = UserBridge()
-	}
-	```
-	*/
-	public protocol Serializable {
+	 extension User: Defaults.Serializable {
+	 	static let bridge = UserBridge()
+	 }
+	 ```
+	 */
+	protocol Serializable {
 		typealias Value = Bridge.Value
 		typealias Serializable = Bridge.Serializable
 		associatedtype Bridge: Defaults.Bridge
 
 		/**
-		Static bridge for the `Value` which cannot be stored natively.
-		*/
+		 Static bridge for the `Value` which cannot be stored natively.
+		 */
 		static var bridge: Bridge { get }
 
 		/**
-		A flag to determine whether `Value` can be stored natively or not.
-		*/
+		 A flag to determine whether `Value` can be stored natively or not.
+		 */
 		static var isNativelySupportedType: Bool { get }
 	}
 }
 
-extension Defaults {
-	public protocol Bridge {
+public extension Defaults {
+	protocol Bridge {
 		associatedtype Value
 		associatedtype Serializable
 
@@ -44,47 +44,47 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
+public extension Defaults {
 	/**
-	Ambiguous bridge selector protocol that lets you select your preferred bridge when there are multiple possibilities.
+	 Ambiguous bridge selector protocol that lets you select your preferred bridge when there are multiple possibilities.
 
-	```swift
-	enum Interval: Int, Codable, Defaults.Serializable, Defaults.PreferRawRepresentable {
-		case tenMinutes = 10
-		case halfHour = 30
-		case oneHour = 60
-	}
-	```
+	 ```swift
+	 enum Interval: Int, Codable, Defaults.Serializable, Defaults.PreferRawRepresentable {
+	 	case tenMinutes = 10
+	 	case halfHour = 30
+	 	case oneHour = 60
+	 }
+	 ```
 
-	By default, if an `enum` conforms to `Codable` and `Defaults.Serializable`, it will use the `CodableBridge`, but by conforming to `Defaults.PreferRawRepresentable`, we can switch the bridge back to `RawRepresentableBridge`.
-	*/
-	public protocol PreferRawRepresentable: RawRepresentable {}
+	 By default, if an `enum` conforms to `Codable` and `Defaults.Serializable`, it will use the `CodableBridge`, but by conforming to `Defaults.PreferRawRepresentable`, we can switch the bridge back to `RawRepresentableBridge`.
+	 */
+	protocol PreferRawRepresentable: RawRepresentable {}
 
 	/**
-	Ambiguous bridge selector protocol that lets you select your preferred bridge when there are multiple possibilities.
-	*/
-	public protocol PreferNSSecureCoding: NSObject, NSSecureCoding {}
+	 Ambiguous bridge selector protocol that lets you select your preferred bridge when there are multiple possibilities.
+	 */
+	protocol PreferNSSecureCoding: NSObject, NSSecureCoding {}
 }
 
-extension Defaults {
-	public protocol CollectionSerializable: Collection, Serializable {
+public extension Defaults {
+	protocol CollectionSerializable: Collection, Serializable {
 		/**
-		`Collection` does not have a initializer, but we need a initializer to convert an array into the `Value`.
-		*/
+		 `Collection` does not have a initializer, but we need a initializer to convert an array into the `Value`.
+		 */
 		init(_ elements: [Element])
 	}
 
-	public protocol SetAlgebraSerializable: SetAlgebra, Serializable {
+	protocol SetAlgebraSerializable: SetAlgebra, Serializable {
 		/**
-		Since `SetAlgebra` protocol does not conform to `Sequence`, we cannot convert a `SetAlgebra` to an `Array` directly.
-		*/
+		 Since `SetAlgebra` protocol does not conform to `Sequence`, we cannot convert a `SetAlgebra` to an `Array` directly.
+		 */
 		func toArray() -> [Element]
 	}
 
-	public protocol CodableBridge: Bridge where Serializable == String, Value: Codable {}
+	protocol CodableBridge: Bridge where Serializable == String, Value: Codable {}
 
-	// Essential properties for serializing and deserializing `ClosedRange` and `Range`.
-	public protocol Range {
+	/// Essential properties for serializing and deserializing `ClosedRange` and `Range`.
+	protocol Range {
 		associatedtype Bound: Comparable, Defaults.Serializable
 
 		var lowerBound: Bound { get }
@@ -94,63 +94,63 @@ extension Defaults {
 	}
 
 	/**
-	A `Bridge` is responsible for serialization and deserialization.
+	 A `Bridge` is responsible for serialization and deserialization.
 
-	It has two associated types `Value` and `Serializable`.
+	 It has two associated types `Value` and `Serializable`.
 
-	- `Value`: The type you want to use.
-	- `Serializable`: The type stored in `UserDefaults`.
-	- `serialize`: Executed before storing to the `UserDefaults` .
-	- `deserialize`: Executed after retrieving its value from the `UserDefaults`.
+	 - `Value`: The type you want to use.
+	 - `Serializable`: The type stored in `UserDefaults`.
+	 - `serialize`: Executed before storing to the `UserDefaults` .
+	 - `deserialize`: Executed after retrieving its value from the `UserDefaults`.
 
-	```swift
-	struct User {
-		username: String
-		password: String
-	}
+	 ```swift
+	 struct User {
+	 	username: String
+	 	password: String
+	 }
 
-	extension User {
-		static let bridge = UserBridge()
-	}
+	 extension User {
+	 	static let bridge = UserBridge()
+	 }
 
-	struct UserBridge: Defaults.Bridge {
-		typealias Value = User
-		typealias Serializable = [String: String]
+	 struct UserBridge: Defaults.Bridge {
+	 	typealias Value = User
+	 	typealias Serializable = [String: String]
 
-		func serialize(_ value: Value?) -> Serializable? {
-			guard let value else {
-				return nil
-			}
+	 	func serialize(_ value: Value?) -> Serializable? {
+	 		guard let value else {
+	 			return nil
+	 		}
 
-			return [
-				"username": value.username,
-				"password": value.password
-			]
-		}
+	 		return [
+	 			"username": value.username,
+	 			"password": value.password
+	 		]
+	 	}
 
-		func deserialize(_ object: Serializable?) -> Value? {
-			guard
-				let object,
-				let username = object["username"],
-				let password = object["password"]
-			else {
-				return nil
-			}
+	 	func deserialize(_ object: Serializable?) -> Value? {
+	 		guard
+	 			let object,
+	 			let username = object["username"],
+	 			let password = object["password"]
+	 		else {
+	 			return nil
+	 		}
 
-			return User(
-				username: username,
-				password: password
-			)
-		}
-	}
-	```
-	*/
-	public typealias RangeSerializable = Defaults.Range & Serializable
+	 		return User(
+	 			username: username,
+	 			password: password
+	 		)
+	 	}
+	 }
+	 ```
+	 */
+	typealias RangeSerializable = Defaults.Range & Serializable
 }
 
 /**
-Essential properties for synchronizing a key value store.
-*/
+ Essential properties for synchronizing a key value store.
+ */
 protocol DefaultsKeyValueStore {
 	func object(forKey aKey: String) -> Any?
 
@@ -169,5 +169,5 @@ protocol DefaultsLockProtocol {
 
 	func unlock()
 
-	func with<R, E>(_ body: @Sendable () throws(E) -> R) throws(E) -> R where R: Sendable
+	func with<R: Sendable, E>(_ body: @Sendable () throws(E) -> R) throws(E) -> R
 }

@@ -5,8 +5,8 @@
 //  Created by Adon Omeri on 21/3/2026.
 //
 
-import SwiftUI
 import Combine
+import SwiftUI
 
 struct PairingStatusView: View {
 	let isConnected: Bool
@@ -14,7 +14,7 @@ struct PairingStatusView: View {
 	let pairingState: DiscoveredMac.PairingState
 	let onDisconnect: () -> Void
 	let onForget: () -> Void
-	
+
 	@State private var keyboardVisible = false
 
 	var body: some View {

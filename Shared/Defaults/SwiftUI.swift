@@ -1,5 +1,5 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 extension Defaults {
 	@MainActor
@@ -62,8 +62,8 @@ extension Defaults {
 		}
 
 		/**
-		Reset the key back to its default value.
-		*/
+		 Reset the key back to its default value.
+		 */
 		func reset() {
 			key.reset()
 		}
@@ -71,10 +71,10 @@ extension Defaults {
 }
 
 /**
-Access stored values from SwiftUI.
+ Access stored values from SwiftUI.
 
-This is similar to `@AppStorage` but it accepts a ``Defaults/Key`` and many more types.
-*/
+ This is similar to `@AppStorage` but it accepts a ``Defaults/Key`` and many more types.
+ */
 @MainActor
 @propertyWrapper
 public struct Default<Value: Defaults.Serializable>: @preconcurrency DynamicProperty {
@@ -86,31 +86,31 @@ public struct Default<Value: Defaults.Serializable>: @preconcurrency DynamicProp
 	@StateObject private var observable: Defaults.Observable<Value>
 
 	/**
-	Get/set a `Defaults` item and also have the view be updated when the value changes. This is similar to `@State`.
+	 Get/set a `Defaults` item and also have the view be updated when the value changes. This is similar to `@State`.
 
-	- Important: You cannot use this in an `ObservableObject`. It's meant to be used in a `View`.
+	 - Important: You cannot use this in an `ObservableObject`. It's meant to be used in a `View`.
 
-	```swift
-	extension Defaults.Keys {
-		static let hasUnicorn = Key<Bool>("hasUnicorn", default: false)
-	}
+	 ```swift
+	 extension Defaults.Keys {
+	 	static let hasUnicorn = Key<Bool>("hasUnicorn", default: false)
+	 }
 
-	struct ContentView: View {
-		@Default(.hasUnicorn) var hasUnicorn
+	 struct ContentView: View {
+	 	@Default(.hasUnicorn) var hasUnicorn
 
-		var body: some View {
-			Text("Has Unicorn: \(hasUnicorn)")
-			Toggle("Toggle", isOn: $hasUnicorn)
-			Button("Reset") {
-				_hasUnicorn.reset()
-			}
-		}
-	}
-	```
-	*/
+	 	var body: some View {
+	 		Text("Has Unicorn: \(hasUnicorn)")
+	 		Toggle("Toggle", isOn: $hasUnicorn)
+	 		Button("Reset") {
+	 			_hasUnicorn.reset()
+	 		}
+	 	}
+	 }
+	 ```
+	 */
 	public init(_ key: Defaults.Key<Value>) {
 		self.key = key
-		self._observable = .init(wrappedValue: .init(key))
+		_observable = .init(wrappedValue: .init(key))
 	}
 
 	public var wrappedValue: Value {
@@ -120,17 +120,23 @@ public struct Default<Value: Defaults.Serializable>: @preconcurrency DynamicProp
 		}
 	}
 
-	public var projectedValue: Binding<Value> { $observable.value }
+	public var projectedValue: Binding<Value> {
+		$observable.value
+	}
 
 	/**
-	The default value of the key.
-	*/
-	public var defaultValue: Value { key.defaultValue }
+	 The default value of the key.
+	 */
+	public var defaultValue: Value {
+		key.defaultValue
+	}
 
 	/**
-	Combine publisher that publishes values when the `Defaults` item changes.
-	*/
-	public var publisher: Publisher { Defaults.publisher(key) }
+	 Combine publisher that publishes values when the `Defaults` item changes.
+	 */
+	public var publisher: Publisher {
+		Defaults.publisher(key)
+	}
 
 	@_documentation(visibility: private)
 	public mutating func update() {
@@ -139,75 +145,77 @@ public struct Default<Value: Defaults.Serializable>: @preconcurrency DynamicProp
 	}
 
 	/**
-	Reset the key back to its default value.
+	 Reset the key back to its default value.
 
-	```swift
-	extension Defaults.Keys {
-		static let opacity = Key<Double>("opacity", default: 1)
-	}
+	 ```swift
+	 extension Defaults.Keys {
+	 	static let opacity = Key<Double>("opacity", default: 1)
+	 }
 
-	struct ContentView: View {
-		@Default(.opacity) var opacity
+	 struct ContentView: View {
+	 	@Default(.opacity) var opacity
 
-		var body: some View {
-			Button("Reset") {
-				_opacity.reset()
-			}
-		}
-	}
-	```
-	*/
+	 	var body: some View {
+	 		Button("Reset") {
+	 			_opacity.reset()
+	 		}
+	 	}
+	 }
+	 ```
+	 */
 	public func reset() {
 		key.reset()
 	}
 }
 
-extension Default where Value: Equatable {
+public extension Default where Value: Equatable {
 	/**
-	Indicates whether the value is the same as the default value.
-	*/
-	public var isDefaultValue: Bool { wrappedValue == defaultValue }
+	 Indicates whether the value is the same as the default value.
+	 */
+	var isDefaultValue: Bool {
+		wrappedValue == defaultValue
+	}
 }
 
-extension Defaults {
+public extension Defaults {
 	/**
-	A SwiftUI `Toggle` view that is connected to a ``Defaults/Key`` with a `Bool` value.
+	 A SwiftUI `Toggle` view that is connected to a ``Defaults/Key`` with a `Bool` value.
 
-	The toggle works exactly like the SwiftUI `Toggle`.
+	 The toggle works exactly like the SwiftUI `Toggle`.
 
-	```swift
-	extension Defaults.Keys {
-		static let showAllDayEvents = Key<Bool>("showAllDayEvents", default: false)
-	}
+	 ```swift
+	 extension Defaults.Keys {
+	 	static let showAllDayEvents = Key<Bool>("showAllDayEvents", default: false)
+	 }
 
-	struct ShowAllDayEventsSetting: View {
-		var body: some View {
-			Defaults.Toggle("Show All-Day Events", key: .showAllDayEvents)
-		}
-	}
-	```
+	 struct ShowAllDayEventsSetting: View {
+	 	var body: some View {
+	 		Defaults.Toggle("Show All-Day Events", key: .showAllDayEvents)
+	 	}
+	 }
+	 ```
 
-	You can also listen to changes:
+	 You can also listen to changes:
 
-	```swift
-	struct ShowAllDayEventsSetting: View {
-		var body: some View {
-			Defaults.Toggle("Show All-Day Events", key: .showAllDayEvents)
-				// Note that this has to be directly attached to `Defaults.Toggle`. It's not `View#onChange()`.
-				.onChange {
-					print("Value", $0)
-				}
-		}
-	}
-	```
-	*/
-	public struct Toggle<Label: View>: View {
+	 ```swift
+	 struct ShowAllDayEventsSetting: View {
+	 	var body: some View {
+	 		Defaults.Toggle("Show All-Day Events", key: .showAllDayEvents)
+	 			// Note that this has to be directly attached to `Defaults.Toggle`. It's not `View#onChange()`.
+	 			.onChange {
+	 				print("Value", $0)
+	 			}
+	 	}
+	 }
+	 ```
+	 */
+	struct Toggle<Label: View>: View {
 		@ViewStorage private var onChange: ((Bool) -> Void)?
 
 		private let label: () -> Label
 		private let inverted: Bool
 
-		// Intentionally using `@ObservedObject` over `@StateObject` so that the key can be dynamically changed.
+		/// Intentionally using `@ObservedObject` over `@StateObject` so that the key can be dynamically changed.
 		@ObservedObject private var observable: Defaults.Observable<Bool>
 
 		public init(
@@ -217,7 +225,7 @@ extension Defaults {
 		) {
 			self.inverted = inverted
 			self.label = label
-			self.observable = .init(key)
+			observable = .init(key)
 		}
 
 		@_documentation(visibility: private)
@@ -233,8 +241,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults.Toggle<Text> {
-	public init(
+public extension Defaults.Toggle<Text> {
+	init(
 		_ title: some StringProtocol,
 		key: Defaults.Key<Bool>,
 		inverted: Bool = false
@@ -245,8 +253,8 @@ extension Defaults.Toggle<Text> {
 	}
 }
 
-extension Defaults.Toggle<Label<Text, Image>> {
-	public init(
+public extension Defaults.Toggle<Label<Text, Image>> {
+	init(
 		_ title: some StringProtocol,
 		systemImage: String,
 		key: Defaults.Key<Bool>,
@@ -258,11 +266,11 @@ extension Defaults.Toggle<Label<Text, Image>> {
 	}
 }
 
-extension Defaults.Toggle {
+public extension Defaults.Toggle {
 	/**
-	Do something when the value changes to a different value.
-	*/
-	public func onChange(_ action: @escaping (Bool) -> Void) -> Self {
+	 Do something when the value changes to a different value.
+	 */
+	func onChange(_ action: @escaping (Bool) -> Void) -> Self {
 		onChange = action
 		return self
 	}
@@ -290,7 +298,7 @@ private struct ViewStorage<Value>: DynamicProperty {
 	}
 
 	init(wrappedValue value: @autoclosure @escaping () -> Value) {
-		self._valueBox = .init(wrappedValue: ValueBox(value()))
+		_valueBox = .init(wrappedValue: ValueBox(value()))
 	}
 }
 

@@ -1,12 +1,12 @@
 import SwiftUI
 #if os(macOS)
-import AppKit
+	import AppKit
 #else
-import UIKit
+	import UIKit
 #endif
 
-extension Defaults.CodableBridge {
-	public func serialize(_ value: Value?) -> Serializable? {
+public extension Defaults.CodableBridge {
+	func serialize(_ value: Value?) -> Serializable? {
 		guard let value else {
 			return nil
 		}
@@ -22,7 +22,7 @@ extension Defaults.CodableBridge {
 		}
 	}
 
-	public func deserialize(_ object: Serializable?) -> Value? {
+	func deserialize(_ object: Serializable?) -> Value? {
 		guard let object else {
 			return nil
 		}
@@ -32,34 +32,34 @@ extension Defaults.CodableBridge {
 }
 
 /**
-Any `Value` that conforms to `Codable` and `Defaults.Serializable` will use `CodableBridge` to do the serialization and deserialization.
-*/
-extension Defaults {
-	public struct TopLevelCodableBridge<Value: Codable>: CodableBridge {}
+ Any `Value` that conforms to `Codable` and `Defaults.Serializable` will use `CodableBridge` to do the serialization and deserialization.
+ */
+public extension Defaults {
+	struct TopLevelCodableBridge<Value: Codable>: CodableBridge {}
 }
 
 /**
-`RawRepresentableCodableBridge` is needed because, for example, with `enum SomeEnum: String, Codable, Defaults.Serializable`, the compiler will be confused between `RawRepresentableBridge` and `TopLevelCodableBridge`.
-*/
-extension Defaults {
-	public struct RawRepresentableCodableBridge<Value: RawRepresentable & Codable>: CodableBridge {}
+ `RawRepresentableCodableBridge` is needed because, for example, with `enum SomeEnum: String, Codable, Defaults.Serializable`, the compiler will be confused between `RawRepresentableBridge` and `TopLevelCodableBridge`.
+ */
+public extension Defaults {
+	struct RawRepresentableCodableBridge<Value: RawRepresentable & Codable>: CodableBridge {}
 }
 
 /**
-This exists to avoid compiler ambiguity.
-*/
-extension Defaults {
-	public struct CodableNSSecureCodingBridge<Value: Codable & NSSecureCoding & NSObject>: CodableBridge {}
+ This exists to avoid compiler ambiguity.
+ */
+public extension Defaults {
+	struct CodableNSSecureCodingBridge<Value: Codable & NSSecureCoding & NSObject>: CodableBridge {}
 }
 
-extension Defaults {
-	public struct URLBridge: CodableBridge, Sendable {
+public extension Defaults {
+	struct URLBridge: CodableBridge, Sendable {
 		public typealias Value = URL
 	}
 }
 
-extension Defaults {
-	public struct RawRepresentableBridge<Value: RawRepresentable>: Bridge {
+public extension Defaults {
+	struct RawRepresentableBridge<Value: RawRepresentable>: Bridge {
 		public typealias Serializable = Value.RawValue
 
 		public func serialize(_ value: Value?) -> Serializable? {
@@ -76,8 +76,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct NSSecureCodingBridge<Value: NSSecureCoding & NSObject>: Bridge {
+public extension Defaults {
+	struct NSSecureCodingBridge<Value: NSSecureCoding & NSObject>: Bridge {
 		public typealias Serializable = Data
 
 		public func serialize(_ value: Value?) -> Serializable? {
@@ -103,8 +103,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct OptionalBridge<Wrapped: Serializable>: Bridge {
+public extension Defaults {
+	struct OptionalBridge<Wrapped: Serializable>: Bridge {
 		public typealias Value = Wrapped.Value
 		public typealias Serializable = Wrapped.Serializable
 
@@ -118,8 +118,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct ArrayBridge<Element: Serializable>: Bridge {
+public extension Defaults {
+	struct ArrayBridge<Element: Serializable>: Bridge {
 		public typealias Value = [Element]
 		public typealias Serializable = [Element.Serializable]
 
@@ -141,8 +141,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct DictionaryBridge<Key: LosslessStringConvertible & Hashable, Element: Serializable>: Bridge {
+public extension Defaults {
+	struct DictionaryBridge<Key: LosslessStringConvertible & Hashable, Element: Serializable>: Bridge {
 		public typealias Value = [Key: Element.Value]
 		public typealias Serializable = [String: Element.Serializable]
 
@@ -175,10 +175,10 @@ extension Defaults {
 }
 
 /**
-We need both `SetBridge` and `SetAlgebraBridge` because `Set` conforms to `Sequence` but `SetAlgebra` does not. `Set` conforms to `Sequence`, so we can convert it into an array with `Array.init<S>(S)` and store it in the `UserDefaults`. But `SetAlgebra` does not, so it is hard to convert it into an array. Thats why we need the `Defaults.SetAlgebraSerializable` protocol to convert it into an array.
-*/
-extension Defaults {
-	public struct SetBridge<Element: Serializable & Hashable>: Bridge {
+ We need both `SetBridge` and `SetAlgebraBridge` because `Set` conforms to `Sequence` but `SetAlgebra` does not. `Set` conforms to `Sequence`, so we can convert it into an array with `Array.init<S>(S)` and store it in the `UserDefaults`. But `SetAlgebra` does not, so it is hard to convert it into an array. Thats why we need the `Defaults.SetAlgebraSerializable` protocol to convert it into an array.
+ */
+public extension Defaults {
+	struct SetBridge<Element: Serializable & Hashable>: Bridge {
 		public typealias Value = Set<Element>
 		public typealias Serializable = Any
 
@@ -215,8 +215,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct SetAlgebraBridge<Value: SetAlgebraSerializable>: Bridge where Value.Element: Serializable {
+public extension Defaults {
+	struct SetAlgebraBridge<Value: SetAlgebraSerializable>: Bridge where Value.Element: Serializable {
 		public typealias Element = Value.Element
 		public typealias Serializable = Any
 
@@ -253,8 +253,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct CollectionBridge<Value: CollectionSerializable>: Bridge where Value.Element: Serializable {
+public extension Defaults {
+	struct CollectionBridge<Value: CollectionSerializable>: Bridge where Value.Element: Serializable {
 		public typealias Element = Value.Element
 		public typealias Serializable = Any
 
@@ -291,8 +291,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct UUIDBridge: Bridge, Sendable {
+public extension Defaults {
+	struct UUIDBridge: Bridge, Sendable {
 		public typealias Value = UUID
 		public typealias Serializable = String
 
@@ -310,8 +310,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct RangeBridge<T: RangeSerializable>: Bridge {
+public extension Defaults {
+	struct RangeBridge<T: RangeSerializable>: Bridge {
 		public typealias Value = T
 		public typealias Serializable = [Any]
 		typealias Bound = T.Bound
@@ -363,20 +363,20 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
+public extension Defaults {
 	/**
-	The bridge which is responsible for `SwiftUI.Color` serialization and deserialization.
+	 The bridge which is responsible for `SwiftUI.Color` serialization and deserialization.
 
-	It is unsafe to convert `SwiftUI.Color` to `UIColor` and use `UIColor.bridge` to serialize it, because `UIColor` does not hold a color space, but `Swift.Color` does (which means color space might get lost in the conversion). The bridge will always try to preserve the color space whenever `Color#cgColor` exists. Only when `Color#cgColor` is `nil`, will it use `UIColor.bridge` to do the serialization and deserialization.
-	*/
-	public struct ColorBridge: Bridge, Sendable {
+	 It is unsafe to convert `SwiftUI.Color` to `UIColor` and use `UIColor.bridge` to serialize it, because `UIColor` does not hold a color space, but `Swift.Color` does (which means color space might get lost in the conversion). The bridge will always try to preserve the color space whenever `Color#cgColor` exists. Only when `Color#cgColor` is `nil`, will it use `UIColor.bridge` to do the serialization and deserialization.
+	 */
+	struct ColorBridge: Bridge, Sendable {
 		public typealias Value = Color
 		public typealias Serializable = Any
 
 		#if os(macOS)
-		private typealias XColor = NSColor
+			private typealias XColor = NSColor
 		#else
-		private typealias XColor = UIColor
+			private typealias XColor = UIColor
 		#endif
 
 		public func serialize(_ value: Value?) -> Serializable? {
@@ -423,8 +423,8 @@ extension Defaults {
 	}
 }
 
-extension Defaults {
-	public struct AnyBridge: Bridge, Sendable {
+public extension Defaults {
+	struct AnyBridge: Bridge, Sendable {
 		public typealias Value = Defaults.AnySerializable
 		public typealias Serializable = Any
 

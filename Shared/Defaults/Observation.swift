@@ -4,46 +4,46 @@ public protocol _DefaultsObservation: AnyObject {
 	func invalidate()
 
 	/**
-	Keep this observation alive for as long as, and no longer than, another object exists.
+	 Keep this observation alive for as long as, and no longer than, another object exists.
 
-	```swift
-	Defaults.observe(.xyz) { [unowned self] change in
-		self.xyz = change.newValue
-	}.tieToLifetime(of: self)
-	```
-	*/
+	 ```swift
+	 Defaults.observe(.xyz) { [unowned self] change in
+	 	self.xyz = change.newValue
+	 }.tieToLifetime(of: self)
+	 ```
+	 */
 	@discardableResult
 	func tieToLifetime(of weaklyHeldObject: AnyObject) -> Self
 
 	/**
-	Break the lifetime tie created by `tieToLifetime(of:)`, if one exists.
+	 Break the lifetime tie created by `tieToLifetime(of:)`, if one exists.
 
-	- Postcondition: The effects of any call to `tieToLifetime(of:)` are reversed.
-	- Note: If the tied-to object has already died, then self is considered to be invalidated, and this method has no logical effect.
-	*/
+	 - Postcondition: The effects of any call to `tieToLifetime(of:)` are reversed.
+	 - Note: If the tied-to object has already died, then self is considered to be invalidated, and this method has no logical effect.
+	 */
 	func removeLifetimeTie()
 }
 
-extension Defaults {
-	public typealias Observation = _DefaultsObservation
+public extension Defaults {
+	typealias Observation = _DefaultsObservation
 
-	public enum ObservationOption: Int, Sendable, Hashable {
+	enum ObservationOption: Int, Sendable, Hashable {
 		/**
-		Whether a notification should be sent to the observer immediately, before the observer registration method even returns.
-		*/
+		 Whether a notification should be sent to the observer immediately, before the observer registration method even returns.
+		 */
 		case initial = 0
 
 		/**
-		Whether separate notifications should be sent to the observer before and after each change, instead of a single notification after the change.
-		*/
+		 Whether separate notifications should be sent to the observer before and after each change, instead of a single notification after the change.
+		 */
 		case prior = 1
 	}
 
-	public typealias ObservationOptions = Set<ObservationOption>
+	typealias ObservationOptions = Set<ObservationOption>
 }
 
 extension Defaults {
-	private static func deserialize<Value: Serializable>(_ value: Any?, to type: Value.Type) -> Value? {
+	private static func deserialize<Value: Serializable>(_ value: Any?, to _: Value.Type) -> Value? {
 		guard
 			let value,
 			!(value is NSNull)
@@ -62,11 +62,11 @@ extension Defaults {
 		let oldValue: Any?
 
 		init(change: [NSKeyValueChangeKey: Any]) {
-			self.kind = NSKeyValueChange(rawValue: change[.kindKey] as! UInt)!
-			self.indexes = change[.indexesKey] as? IndexSet
-			self.isPrior = change[.notificationIsPriorKey] as? Bool ?? false
-			self.oldValue = change[.oldKey]
-			self.newValue = change[.newKey]
+			kind = NSKeyValueChange(rawValue: change[.kindKey] as! UInt)!
+			indexes = change[.indexesKey] as? IndexSet
+			isPrior = change[.notificationIsPriorKey] as? Bool ?? false
+			oldValue = change[.oldKey]
+			newValue = change[.newKey]
 		}
 	}
 
@@ -78,11 +78,11 @@ extension Defaults {
 		public let oldValue: Value
 
 		init(change: BaseChange, defaultValue: Value) {
-			self.kind = change.kind
-			self.indexes = change.indexes
-			self.isPrior = change.isPrior
-			self.oldValue = deserialize(change.oldValue, to: Value.self) ?? defaultValue
-			self.newValue = deserialize(change.newValue, to: Value.self) ?? defaultValue
+			kind = change.kind
+			indexes = change.indexes
+			isPrior = change.isPrior
+			oldValue = deserialize(change.oldValue, to: Value.self) ?? defaultValue
+			newValue = deserialize(change.newValue, to: Value.self) ?? defaultValue
 		}
 	}
 
@@ -91,26 +91,26 @@ extension Defaults {
 	}
 
 	/**
-	Execute the closure without triggering change events.
+	 Execute the closure without triggering change events.
 
-	Any `Defaults` key changes made within the closure will not propagate to `Defaults` event listeners (`Defaults.observe()` and `Defaults.publisher()`). This can be useful to prevent infinite recursion when you want to change a key in the callback listening to changes for the same key.
+	 Any `Defaults` key changes made within the closure will not propagate to `Defaults` event listeners (`Defaults.observe()` and `Defaults.publisher()`). This can be useful to prevent infinite recursion when you want to change a key in the callback listening to changes for the same key.
 
-	- Note: This only works with `Defaults.observe()` and `Defaults.publisher()`. User-made KVO will not be affected.
+	 - Note: This only works with `Defaults.observe()` and `Defaults.publisher()`. User-made KVO will not be affected.
 
-	```swift
-	let observer = Defaults.observe(keys: .key1, .key2) {
-		// …
+	 ```swift
+	 let observer = Defaults.observe(keys: .key1, .key2) {
+	 	// …
 
-		Defaults.withoutPropagation {
-			// Update `.key1` without propagating the change to listeners.
-			Defaults[.key1] = 11
-		}
+	 	Defaults.withoutPropagation {
+	 		// Update `.key1` without propagating the change to listeners.
+	 		Defaults[.key1] = 11
+	 	}
 
-		// This will be propagated.
-		Defaults[.someKey] = true
-	}
-	```
-	*/
+	 	// This will be propagated.
+	 	Defaults[.someKey] = true
+	 }
+	 ```
+	 */
 	public static func withoutPropagation(_ closure: () -> Void) {
 		// How does it work?
 		// KVO observation callbacks are executed right after a change is made, and run on the same thread as the caller. So it works by storing a flag in the current thread's dictionary, which is then evaluated in the callback.
@@ -142,9 +142,9 @@ extension Defaults {
 	}
 
 	/**
-	Standard observation for `Defaults`.
-	The only class which handle the low level observation.
-	*/
+	 Standard observation for `Defaults`.
+	 The only class which handle the low level observation.
+	 */
 	final class DefaultsObservation: NSObject {
 		typealias Callback = (SuiteKeyPair, BaseChange) -> Void
 
@@ -156,14 +156,14 @@ extension Defaults {
 		private let lock: Lock = .make()
 
 		init(object: UserDefaults, key: String, _ callback: @escaping Callback) {
-			self.suite = object
-			self.name = key
+			suite = object
+			name = key
 			self.callback = callback
 		}
 
 		init(key: Defaults._AnyKey, _ callback: @escaping Callback) {
-			self.suite = key.suite
-			self.name = key.name
+			suite = key.suite
+			name = key.name
 			self.callback = callback
 		}
 
@@ -229,18 +229,18 @@ extension Defaults {
 	}
 
 	/**
-	Observation that wraps `DefaultsObservation` and adds a lifetime association.
-	*/
+	 Observation that wraps `DefaultsObservation` and adds a lifetime association.
+	 */
 	final class DefaultsObservationWithLifeTime: Observation {
 		private var observation: DefaultsObservation
 		private var lifetimeAssociation: LifetimeAssociation?
 
 		init(object: UserDefaults, key: String, _ callback: @escaping DefaultsObservation.Callback) {
-			self.observation = .init(object: object, key: key, callback)
+			observation = .init(object: object, key: key, callback)
 		}
 
 		init(key: Defaults._AnyKey, _ callback: @escaping DefaultsObservation.Callback) {
-			self.observation = .init(key: key, callback)
+			observation = .init(key: key, callback)
 		}
 
 		deinit {
@@ -272,9 +272,9 @@ extension Defaults {
 	}
 
 	/**
-	Observation that manages multiple `DefaultsObservation`.
-	Can add or remove the observed key dynamically.
-	*/
+	 Observation that manages multiple `DefaultsObservation`.
+	 Can add or remove the observed key dynamically.
+	 */
 	final class CompositeDefaultsObservation: Observation {
 		private var observations: Set<DefaultsObservation> = []
 		private let callback: DefaultsObservation.Callback
@@ -335,21 +335,21 @@ extension Defaults {
 	}
 
 	/**
-	Observe a defaults key.
+	 Observe a defaults key.
 
-	```swift
-	extension Defaults.Keys {
-		static let isUnicornMode = Key<Bool>("isUnicornMode", default: false)
-	}
+	 ```swift
+	 extension Defaults.Keys {
+	 	static let isUnicornMode = Key<Bool>("isUnicornMode", default: false)
+	 }
 
-	let observer = Defaults.observe(.isUnicornMode) { change in
-		print(change.newValue)
-		//=> false
-	}
-	```
+	 let observer = Defaults.observe(.isUnicornMode) { change in
+	 	print(change.newValue)
+	 	//=> false
+	 }
+	 ```
 
-	- Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
-	*/
+	 - Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
+	 */
 	@MainActor
 	public static func observe<Value: Serializable>(
 		_ key: Key<Value>,
@@ -366,21 +366,21 @@ extension Defaults {
 	}
 
 	/**
-	Observe multiple keys of any type, but without any information about the changes.
+	 Observe multiple keys of any type, but without any information about the changes.
 
-	```swift
-	extension Defaults.Keys {
-		static let setting1 = Key<Bool>("setting1", default: false)
-		static let setting2 = Key<Bool>("setting2", default: true)
-	}
+	 ```swift
+	 extension Defaults.Keys {
+	 	static let setting1 = Key<Bool>("setting1", default: false)
+	 	static let setting2 = Key<Bool>("setting2", default: true)
+	 }
 
-	let observer = Defaults.observe(keys: .setting1, .setting2) {
-		// …
-	}
-	```
+	 let observer = Defaults.observe(keys: .setting1, .setting2) {
+	 	// …
+	 }
+	 ```
 
-	- Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
-	*/
+	 - Warning: This method exists for backwards compatibility and will be deprecated sometime in the future. Use ``Defaults/updates(_:initial:)-88orv`` instead.
+	 */
 	@MainActor
 	public static func observe(
 		keys: _AnyKey...,

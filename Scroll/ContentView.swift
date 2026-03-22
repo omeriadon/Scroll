@@ -319,7 +319,7 @@ struct ContentView: View {
 												}
 											}
 											Spacer()
-											if connectivityManager.pairingState == .pending && connectivityManager.currentMac?.id == mac.id {
+											if connectivityManager.pairingState == .pending, connectivityManager.currentMac?.id == mac.id {
 												Image(systemName: "progress.indicator")
 													.symbolEffect(.rotate.byLayer, options: .repeat(.continuous))
 													.transition(.blurReplace)

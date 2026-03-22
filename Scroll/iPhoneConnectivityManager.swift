@@ -35,13 +35,13 @@ final class PhoneConnectivityManager {
 
 	var macConnectionStatus: String {
 		if networkClient.isPaired, let name = networkClient.currentHostName {
-			return name
+			name
 		} else if pairingState == .rejected {
-			return "Rejected"
+			"Rejected"
 		} else if networkClient.isConnected, !networkClient.isPaired {
-			return "Pairing..."
+			"Pairing..."
 		} else {
-			return "Not Connected"
+			"Not Connected"
 		}
 	}
 

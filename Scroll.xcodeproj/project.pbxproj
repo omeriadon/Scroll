@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2ACF50312F6D87DA00C3F9D4 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 2ACF50302F6D87DA00C3F9D4 /* ColorfulX */; };
+		2AE14AB52F6FA6DA00160A6E /* Luminare in Frameworks */ = {isa = PBXBuildFile; productRef = 2AE14AB42F6FA6DA00160A6E /* Luminare */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -60,6 +61,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2AE14AB52F6FA6DA00160A6E /* Luminare in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -140,6 +142,7 @@
 			);
 			name = Scroll_Mac;
 			packageProductDependencies = (
+				2AE14AB42F6FA6DA00160A6E /* Luminare */,
 			);
 			productName = ScrollMac;
 			productReference = 2A365B912F6A9000008B6B2C /* Scroll_Mac.app */;
@@ -174,6 +177,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				2ACF502F2F6D87DA00C3F9D4 /* XCRemoteSwiftPackageReference "ColorfulX" */,
+				2AE14AB32F6FA6DA00160A6E /* XCRemoteSwiftPackageReference "Luminare" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2A365B582F6A77BF008B6B2C /* Products */;
@@ -560,6 +564,14 @@
 				minimumVersion = 6.1.0;
 			};
 		};
+		2AE14AB32F6FA6DA00160A6E /* XCRemoteSwiftPackageReference "Luminare" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/MrKai77/Luminare";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.2.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -567,6 +579,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 2ACF502F2F6D87DA00C3F9D4 /* XCRemoteSwiftPackageReference "ColorfulX" */;
 			productName = ColorfulX;
+		};
+		2AE14AB42F6FA6DA00160A6E /* Luminare */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2AE14AB32F6FA6DA00160A6E /* XCRemoteSwiftPackageReference "Luminare" */;
+			productName = Luminare;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
