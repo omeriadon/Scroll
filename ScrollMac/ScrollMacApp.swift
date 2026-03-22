@@ -5,13 +5,16 @@ import SwiftUI
 struct ScrollMacApp: App {
 	@State private var hostManager = MacHostManager()
 	@Environment(\.openWindow) private var openWindow
+	@Environment(\.dismissWindow) var dismissWindow
+
+	@State private var isHovered = false
 
 	var body: some Scene {
 		MenuBarExtra("Scroll", systemImage: "digitalcrown.horizontal.press") {
 			MenuBarView()
 				.environment(hostManager)
 		}
-		.menuBarExtraStyle(.menu)
+		.menuBarExtraStyle(.window)
 		.onChange(of: hostManager.showPairingAlert) { _, showAlert in
 			if showAlert {
 				Task { @MainActor in
@@ -22,9 +25,49 @@ struct ScrollMacApp: App {
 		}
 
 		Window("Settings", id: "scroll-settings") {
-			SettingsView()
-				.environment(hostManager)
+			NavigationStack {
+				SettingsView()
+					.safeAreaBar(edge: .top, alignment: .trailing, spacing: 0) {
+						Text("rtbfd")
+							.frame(height: 0)
+							.opacity(0)
+							.accessibilityHidden(true)
+					}
+					.safeAreaInset(edge: .top, alignment: .center, spacing: 0) {
+						ZStack(alignment: .leading) {
+							WindowDragHandle()
+								.frame(maxWidth: .infinity)
+								.frame(height: 50)
+								.ignoresSafeArea()
+
+							Button {
+								dismissWindow(id: "scroll-settings")
+							} label: {
+								Image(systemName: "xmark")
+									.imageScale(.medium)
+									.padding(1)
+									.opacity(isHovered ? 1 : 0)
+									.foregroundStyle(Color(red: 129/255, green: 49/255, blue: 47/255))
+									.fontWeight(.black)
+							}
+							.tint(.red)
+							.onHover { isHovered = $0 }
+							.labelStyle(.iconOnly)
+							.buttonStyle(.glassProminent)
+							.buttonBorderShape(.circle)
+							.padding()
+							.controlSize(.mini)
+						}
+					}
+			}
+			.environment(hostManager)
+			.frame(width: 500, height: 450)
+			.background {
+				SettingsWindowConfigurator()
+			}
+			.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 25))
 		}
+		.windowStyle(.plain)
 		.windowResizability(.contentSize)
 		.commands {
 			CommandGroup(replacing: .appSettings) {
@@ -39,7 +82,7 @@ struct ScrollMacApp: App {
 		Window("Pairing Request", id: "pairing-request") {
 			PairingRequestView()
 				.background {
-					WindowConfigurator()
+					PairingWindowConfigurator()
 				}
 				.environment(hostManager)
 		}
@@ -104,7 +147,7 @@ struct PairingRequestView: View {
 	}
 }
 
-struct WindowConfigurator: NSViewRepresentable {
+struct PairingWindowConfigurator: NSViewRepresentable {
 	func makeNSView(context: Context) -> NSView {
 		let view = NSView()
 		DispatchQueue.main.async {
@@ -127,6 +170,29 @@ struct WindowConfigurator: NSViewRepresentable {
 	func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
+struct SettingsWindowConfigurator: NSViewRepresentable {
+	func makeNSView(context: Context) -> NSView {
+		let view = NSView()
+		DispatchQueue.main.async {
+			guard let w = view.window else { return }
+			object_setClass(w, KeyableWindow.self)
+			w.makeKeyAndOrderFront(nil)
+			w.orderFrontRegardless()
+			w.isOpaque = false
+			w.backgroundColor = .clear
+			w.hasShadow = false
+			w.isMovableByWindowBackground = false
+			w.level = .floating
+			w.contentView?.wantsLayer = true
+			w.contentView?.layer?.cornerRadius = 25
+			w.contentView?.layer?.masksToBounds = true
+		}
+		return view
+	}
+
+	func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
 class KeyableWindow: NSWindow {
 	override var canBecomeKey: Bool {
 		true
@@ -134,5 +200,19 @@ class KeyableWindow: NSWindow {
 
 	override var canBecomeMain: Bool {
 		true
+	}
+}
+
+struct WindowDragHandle: NSViewRepresentable {
+	func makeNSView(context: Context) -> DragView {
+		DragView()
+	}
+
+	func updateNSView(_ nsView: DragView, context: Context) {}
+}
+
+class DragView: NSView {
+	override func mouseDown(with event: NSEvent) {
+		window?.performDrag(with: event)
 	}
 }

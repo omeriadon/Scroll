@@ -56,7 +56,6 @@ struct SettingsView: View {
                 )
 
                 Text(hostManager.accessibilityStatusMessage)
-                    .font(.caption)
                     .foregroundStyle(.secondary)
 
                 HStack {
@@ -71,8 +70,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
-        .frame(minWidth: 400, minHeight: 350)
+		.scrollContentBackground(.hidden)
         .alert("Mac Name", isPresented: $showNameAlert) {
             TextField("Name", text: $editingName)
             Button("Cancel", role: .cancel) { }
